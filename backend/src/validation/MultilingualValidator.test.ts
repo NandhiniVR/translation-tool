@@ -88,7 +88,7 @@ describe('Multilingual Validation & Prompt Building', () => {
       expect(systemPrompt).toContain('Source language: Tamil (ta)');
       expect(systemPrompt).toContain('Target language: Hindi (hi)');
       expect(systemPrompt).toContain('Translate the CURRENT SEGMENT from Tamil (ta) into Hindi (hi).');
-      expect(systemPrompt).toContain('Do NOT assume the source language is English.');
+      expect(systemPrompt).toContain('The source text may be in ANY language');
     });
 
     it('should inject CRITICAL RETRY NOTICE when retry notice is provided', () => {
@@ -126,7 +126,7 @@ describe('Multilingual Validation & Prompt Building', () => {
       const batchPrompt = promptBuilder.buildBatchSystemPrompt(input);
       expect(batchPrompt).toContain('Source language: Urdu (ur)');
       expect(batchPrompt).toContain('Target language: Tamil (ta)');
-      expect(batchPrompt).toContain('Translate the provided array of text segments from Urdu (ur) into Tamil (ta).');
+      expect(batchPrompt).toContain('Translate every segment from Urdu (ur) into Tamil (ta).');
     });
   });
 });

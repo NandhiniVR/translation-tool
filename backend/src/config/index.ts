@@ -43,8 +43,8 @@ export const config = {
     batchSize: getEnvInt('TRANSLATION_BATCH_SIZE', getEnvInt('BATCH_SIZE', 10)),
   },
   storage: {
-    uploadsDir: path.resolve(__dirname, '..', '..', '..', getEnv('UPLOADS_DIR', 'uploads')),
-    outputsDir: path.resolve(__dirname, '..', '..', '..', getEnv('OUTPUTS_DIR', 'outputs')),
+    uploadsDir: process.env.VERCEL ? '/tmp' : path.resolve(__dirname, '..', '..', '..', getEnv('UPLOADS_DIR', 'uploads')),
+    outputsDir: process.env.VERCEL ? '/tmp' : path.resolve(__dirname, '..', '..', '..', getEnv('OUTPUTS_DIR', 'outputs')),
   },
   context: {
     maxChars: getEnvInt('CONTEXT_MAX_CHARS', 500),

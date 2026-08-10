@@ -89,7 +89,25 @@ export function App() {
   };
 
   const handleDownload = () => {
-    if (translationResult?.downloadUrl) {
+    if (!translationResult) return;
+    
+    if (translationResult.downloadData) {
+      // Decode base64 to Blob and trigger download
+      const binaryString = window.atob(translationResult.downloadData);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = translationResult.outputFileName ?? 'translated_document';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } else if (translationResult.downloadUrl) {
       window.location.href = translationResult.downloadUrl;
     }
   };

@@ -9,7 +9,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: process.env['CORS_ORIGIN'] ?? 'http://localhost:5173',
+  origin: process.env.VERCEL ? undefined : (process.env['CORS_ORIGIN'] ?? 'http://localhost:5173'),
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type'],
 }));
@@ -40,10 +40,12 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 });
 
 // Start server
-const port = config.server.port;
-app.listen(port, () => {
-  logger.info(`[Server] Translation backend running on http://localhost:${port}`);
-  logger.info(`[Server] Health check: http://localhost:${port}/health`);
-});
+if (!process.env.VERCEL) {
+  const port = config.server.port;
+  app.listen(port, () => {
+    logger.info(`[Server] Translation backend running on http://localhost:${port}`);
+    logger.info(`[Server] Health check: http://localhost:${port}/health`);
+  });
+}
 
 export default app;

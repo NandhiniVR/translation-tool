@@ -35,6 +35,7 @@ export interface TranslationResponse {
   failed: number;
   validationReport: ValidationReport;
   downloadUrl?: string;
+  downloadData?: string;
   outputFileName?: string;
   failedSegments?: SegmentError[];
   error?: string;

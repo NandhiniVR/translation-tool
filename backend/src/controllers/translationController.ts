@@ -75,7 +75,7 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
     // 1. Resolve DocumentAdapter and parse document (Measure Parsing & Segmentation time)
     const tParseStart = Date.now();
     const adapter = AdapterFactory.getAdapter(file.originalname);
-    const fileBuffer = fs.readFileSync(file.path);
+    const fileBuffer = file.buffer;
 
     const doc = await adapter.parse(fileBuffer, file.originalname);
     const tParseMs = Date.now() - tParseStart;
@@ -132,12 +132,7 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
     // Log structured performance breakdown
     logPerformanceBreakdown(jobId, pMetrics);
 
-    // Clean up uploaded temporary file
-    try {
-      fs.unlinkSync(file.path);
-    } catch {
-      logger.warn(`[Controller] Could not delete uploaded file: ${file.path}`);
-    }
+    // No file cleanup needed since we use multer.memoryStorage
 
     const completedCount = results.filter((r) => r.status === 'completed').length;
     const failedCount = results.filter((r) => r.status === 'failed').length;
@@ -157,6 +152,15 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
+    // Load the generated output file into memory as base64 for Vercel
+    let downloadData: string | undefined = undefined;
+    try {
+      const outBuf = fs.readFileSync(outputFilePath);
+      downloadData = outBuf.toString('base64');
+    } catch {
+      logger.warn(`[Controller] Failed to read output file to base64 for job ${jobId}`);
+    }
+
     res.json({
       jobId,
       success: true,
@@ -166,6 +170,7 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
       failed: failedCount,
       validationReport,
       downloadUrl: `/api/download/${jobId}`,
+      downloadData,
       outputFileName,
       failedSegments: validationReport.failedSegments,
       profilerMetrics: pMetrics,
@@ -239,15 +244,11 @@ export const runBenchmark = async (req: Request, res: Response): Promise<void> =
     }
 
     const adapter = AdapterFactory.getAdapter(file.originalname);
-    const fileBuffer = fs.readFileSync(file.path);
+    const fileBuffer = file.buffer;
     const doc = await adapter.parse(fileBuffer, file.originalname);
 
     // Clean up uploaded test file
-    try {
-      fs.unlinkSync(file.path);
-    } catch {
-      // ignore
-    }
+    // No file cleanup needed since we use multer.memoryStorage
 
     const report = await translationBenchmark.compare(
       doc,

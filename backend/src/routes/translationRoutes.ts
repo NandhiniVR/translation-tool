@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
 import * as path from 'path';
-import { config } from '../config/index.js';
 import {
   getLanguages,
   getDomains,
@@ -13,17 +12,8 @@ import {
 const router = Router();
 
 // Configure multer for file uploads
-// Only accept .mqxliff and .xliff files
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, config.storage.uploadsDir);
-  },
-  filename: (_req, file, cb) => {
-    const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    cb(null, `upload_${timestamp}${ext}`);
-  },
-});
+// Only accept .mqxliff, .xliff, .docx, and .xml files
+const storage = multer.memoryStorage();
 
 const fileFilter = (
   _req: Express.Request,

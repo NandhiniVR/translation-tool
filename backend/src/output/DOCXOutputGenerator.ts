@@ -43,7 +43,8 @@ export class DOCXOutputGenerator implements DocumentOutputGenerator {
     );
 
     if (criticalFailures.length > 0) {
-      const message = `DOCX output blocked: ${criticalFailures.length} segment(s) have unrestored tag or entity tokens.`;
+      const diagDetails = criticalFailures.map(f => `[ID: ${f.segmentId} | Reason: ${f.message}]`).join(', ');
+      const message = `DOCX output blocked: ${criticalFailures.length} segment(s) have unrestored tag or entity tokens. Diagnostics: ${diagDetails}`;
       logger.error(`[DOCXOutputGenerator] ${message}`);
       return {
         success: false,
