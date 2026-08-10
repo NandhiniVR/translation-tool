@@ -6,15 +6,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/$1"
+      "destination": "/api/index.ts"
     },
     {
       "source": "/health",
-      "destination": "/api/health"
-    },
-    {
-      "source": "/((?!api/|health).*)",
-      "destination": "/index.html"
+      "destination": "/api/index.ts"
     }
   ],
   "functions": {
