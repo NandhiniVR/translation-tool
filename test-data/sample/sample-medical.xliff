@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2"
+  xmlns:mq="MQXliff">
+  <file original="sample-document.docx" source-language="en-US" target-language="hi-IN"
+    datatype="x-memoq-xliff">
+    <header>
+      <mq:ProjectInfo ClientName="Test Client" ProjectName="Sample Medical Trial" />
+    </header>
+    <body>
+      <trans-unit id="1" mq:status="unconfirmed">
+        <source>The patient should read this document carefully before signing.</source>
+        <target/>
+      </trans-unit>
+      <trans-unit id="2" mq:status="unconfirmed">
+        <source>Participation in this <bpt id="1" i="1">&lt;strong&gt;</bpt>clinical trial<ept id="2" i="1">&lt;/strong&gt;</ept> is completely voluntary.</source>
+        <target/>
+      </trans-unit>
+      <trans-unit id="3" mq:status="unconfirmed">
+        <source>You may withdraw your consent at any time without giving any reason.</source>
+        <target/>
+      </trans-unit>
+      <trans-unit id="4" mq:status="unconfirmed">
+        <source>The study drug will be administered at a dose of <ph id="3">25 mg</ph> twice daily.</source>
+        <target/>
+      </trans-unit>
+      <trans-unit id="5" mq:status="unconfirmed">
+        <source>For questions, contact Dr. Smith at study@example.com or visit https://example.com/study.</source>
+        <target/>
+      </trans-unit>
+      <trans-unit id="6" mq:status="unconfirmed">
+        <source>Study reference: NCT12345678. Protocol ID: STUDY-2026-MED-001.</source>
+        <target/>
+      </trans-unit>
+      <trans-unit id="7" translate="no">
+        <source>INTERNAL NOTE: Do not translate this segment.</source>
+        <target>INTERNAL NOTE: Do not translate this segment.</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

@@ -1,0 +1,34 @@
+# Environment variables — never commit this file
+.env
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# TypeScript compiled output
+backend/dist/
+frontend/dist/
+
+# Uploaded files (user data)
+uploads/*
+!uploads/.gitkeep
+
+# Generated output files
+outputs/*
+!outputs/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+coverage/
