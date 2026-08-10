@@ -46,7 +46,7 @@ export function App() {
       })
       .catch((err) => {
         console.error('Failed to load initial configuration:', err);
-        setErrorMsg('Failed to connect to translation backend.');
+        setErrorMsg(`Failed to connect to translation backend: ${err.message || 'Unknown error'}`);
       });
   }, []);
 
