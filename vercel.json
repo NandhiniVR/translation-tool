@@ -1,25 +1,37 @@
 {
-  "buildCommand": "cd backend && npm install && npm run build && cd ../frontend && npm install && npm run build",
-  "outputDirectory": "frontend/dist",
-  "framework": null,
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+
+  "services": {
+    "frontend": {
+      "root": "frontend/",
+      "framework": "vite"
+    },
+
+    "backend": {
+      "root": "backend/",
+      "framework": "express",
+      "entrypoint": "../api/index.ts"
+    }
+  },
+
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api"
+      "destination": {
+        "service": "backend"
+      }
     },
     {
       "source": "/health",
-      "destination": "/api"
+      "destination": {
+        "service": "backend"
+      }
     },
     {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": {
+        "service": "frontend"
+      }
     }
-  ],
-  "functions": {
-    "api/index.ts": {
-      "memory": 1024,
-      "maxDuration": 60
-    }
-  }
+  ]
 }
