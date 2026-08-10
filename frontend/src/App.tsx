@@ -46,7 +46,7 @@ export function App() {
       })
       .catch((err) => {
         console.error('Failed to load initial configuration:', err);
-        setErrorMsg('Failed to connect to translation backend. Ensure server is running on port 3001.');
+        setErrorMsg('Failed to connect to translation backend.');
       });
   }, []);
 
