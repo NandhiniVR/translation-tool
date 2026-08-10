@@ -6,14 +6,14 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api"
+      "destination": "/api/$1"
     },
     {
       "source": "/health",
-      "destination": "/api"
+      "destination": "/api/health"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/|health).*)",
       "destination": "/index.html"
     }
   ],

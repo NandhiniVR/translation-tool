@@ -47,21 +47,29 @@ export interface BenchmarkReport {
   speedupPercentage: number;
 }
 
+async function safeJson<T>(res: Response, fallbackError: string): Promise<T> {
+  const text = await res.text();
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Server error (${res.status}): ${text.slice(0, 200) || fallbackError}`);
+  }
+  if (!res.ok) {
+    throw new Error(data?.error ?? `${fallbackError} (${res.status})`);
+  }
+  return data as T;
+}
+
 export async function fetchLanguages(): Promise<Language[]> {
   const res = await fetch('/api/languages');
-  if (!res.ok) {
-    throw new Error(`Failed to fetch languages: ${res.statusText}`);
-  }
-  const data = (await res.json()) as { languages: Language[] };
+  const data = await safeJson<{ languages: Language[] }>(res, 'Failed to fetch languages');
   return data.languages;
 }
 
 export async function fetchDomains(): Promise<Domain[]> {
   const res = await fetch('/api/domains');
-  if (!res.ok) {
-    throw new Error(`Failed to fetch domains: ${res.statusText}`);
-  }
-  const data = (await res.json()) as { domains: Domain[] };
+  const data = await safeJson<{ domains: Domain[] }>(res, 'Failed to fetch domains');
   return data.domains;
 }
 
@@ -84,12 +92,7 @@ export async function translateDocument(
     body: formData,
   });
 
-  const data = await res.json();
-  if (!res.ok && !data.success) {
-    throw new Error(data.error ?? 'Translation request failed.');
-  }
-
-  return data as TranslationResponse;
+  return safeJson<TranslationResponse>(res, 'Translation request failed.');
 }
 
 export async function runBenchmarkApi(
@@ -109,10 +112,5 @@ export async function runBenchmarkApi(
     body: formData,
   });
 
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.error ?? 'Benchmark execution failed.');
-  }
-
-  return (await res.json()) as BenchmarkReport;
+  return safeJson<BenchmarkReport>(res, 'Benchmark execution failed.');
 }

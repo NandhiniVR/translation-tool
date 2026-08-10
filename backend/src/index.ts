@@ -21,10 +21,10 @@ app.use(express.urlencoded({ extended: false }));
 app.use('/outputs', express.static(path.resolve(config.storage.outputsDir)));
 
 // API routes
-app.use('/api', translationRoutes);
+app.use(['/api', '/'], translationRoutes);
 
 // Health check
-app.get('/health', (_req, res) => {
+app.get(['/health', '/api/health'], (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
