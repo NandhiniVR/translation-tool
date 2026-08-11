@@ -74,6 +74,18 @@ const LANGUAGE_REGISTRY: LanguageConfig[] = [
     nativeName: 'বাংলা',
     direction: 'ltr',
   },
+  {
+    code: 'ps',
+    name: 'Pashto',
+    nativeName: 'پښتو',
+    direction: 'rtl',
+  },
+  {
+    code: 'fa',
+    name: 'Farsi (Persian)',
+    nativeName: 'فارسی',
+    direction: 'rtl',
+  },
 ];
 
 /**
@@ -119,4 +131,3 @@ export function getLanguageLabel(code: string): string {
   if (!lang) return code;
   return `${lang.name} (${lang.code})`;
 }
-

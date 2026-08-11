@@ -60,7 +60,7 @@ export interface TranslationRequest {
   jobId: string;
   sourceLanguage: string;
   targetLanguage: string;
-  domain: 'general' | 'medical' | 'legal';
+  domain?: TranslationDomain;
   inputFilePath: string;
   outputFilePath: string;
 }
@@ -133,8 +133,10 @@ export interface LanguageConfig {
 // Domain types
 // ---------------------------------------------------------------------------
 
+export type TranslationDomain = 'universal' | 'general' | 'medical' | 'legal';
+
 export interface DomainConfig {
-  code: 'general' | 'medical' | 'legal';
+  code: TranslationDomain;
   name: string;
   /** Instructions injected into the Gemini translation prompt */
   promptInstructions: string;
@@ -154,7 +156,7 @@ export interface GlossaryTerm {
   /** The preferred translation for this term */
   preferredTranslation: string;
   /** Optional domain restriction — if omitted, applies to all domains */
-  domain?: 'general' | 'medical' | 'legal';
+  domain?: Exclude<TranslationDomain, 'universal'>;
   /** Optional explanatory note */
   note?: string;
 }
@@ -202,7 +204,7 @@ export interface BatchSegmentInputItem {
 export interface BatchPromptInput {
   sourceLanguage: string;
   targetLanguage: string;
-  domain: 'general' | 'medical' | 'legal';
+  domain?: TranslationDomain;
   items: BatchSegmentInputItem[];
   glossaryTerms: GlossaryTerm[];
   languageRules: string[];
@@ -212,7 +214,7 @@ export interface BatchPromptInput {
 export interface PromptInput {
   sourceLanguage: string;
   targetLanguage: string;
-  domain: 'general' | 'medical' | 'legal';
+  domain?: TranslationDomain;
   context: SegmentContext;
   protectedText: string;
   glossaryTerms: GlossaryTerm[];

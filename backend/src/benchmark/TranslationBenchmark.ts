@@ -1,5 +1,5 @@
 import { TranslationPipeline } from '../translation/TranslationPipeline.js';
-import type { TranslationDocument, PipelineProfilerMetrics, TranslationResult } from '../types/index.js';
+import type { TranslationDocument, PipelineProfilerMetrics, TranslationResult, TranslationDomain } from '../types/index.js';
 import { logger } from '../config/logger.js';
 import { config } from '../config/index.js';
 
@@ -50,7 +50,7 @@ export class TranslationBenchmark {
     doc: TranslationDocument,
     sourceLanguage: string,
     targetLanguage: string,
-    domain: 'general' | 'medical' | 'legal'
+    domain: TranslationDomain = 'universal'
   ): Promise<BenchmarkReport> {
     logger.info(`[Benchmark] Starting side-by-side comparison on ${doc.originalFileName} (${doc.segments.length} segments)`);
 

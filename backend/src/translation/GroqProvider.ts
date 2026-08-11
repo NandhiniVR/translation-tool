@@ -13,8 +13,8 @@ export class GroqProvider implements TranslationProvider {
   private readonly client: Groq;
   private readonly maxRetries: number;
 
-  constructor() {
-    this.modelName = config.groq.model;
+  constructor(overrideModel?: string) {
+    this.modelName = overrideModel?.trim() ? overrideModel.trim() : config.groq.model;
     const apiKey = config.groq.apiKey;
 
     if (!apiKey && config.provider === 'groq') {

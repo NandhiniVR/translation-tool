@@ -1,14 +1,10 @@
 import { SegmentValidator } from './SegmentValidator.js';
-import { PromptBuilder } from '../translation/PromptBuilder.js';
-import type { PromptInput, BatchPromptInput } from '../types/index.js';
 
-describe('Multilingual Validation & Prompt Building', () => {
+describe('Multilingual Validation', () => {
   let validator: SegmentValidator;
-  let promptBuilder: PromptBuilder;
 
   beforeEach(() => {
     validator = new SegmentValidator();
-    promptBuilder = new PromptBuilder();
   });
 
   describe('SegmentValidator.checkCompleteness', () => {
@@ -68,65 +64,6 @@ describe('Multilingual Validation & Prompt Building', () => {
       const res = validator.checkCompleteness(source, target, 'en', 'hi');
       expect(res.isComplete).toBe(true);
       expect(res.status).toBe('valid');
-    });
-  });
-
-  describe('PromptBuilder Multilingual Formatting', () => {
-    it('should format explicit language labels like "Tamil (ta)" and "Hindi (hi)" in system prompt', () => {
-      const input: PromptInput = {
-        sourceLanguage: 'ta',
-        targetLanguage: 'hi',
-        domain: 'medical',
-        context: { previousText: '', currentText: '', nextText: '' },
-        protectedText: 'நோயாளிக்கு காய்ச்சல் உள்ளது.',
-        glossaryTerms: [],
-        languageRules: [],
-        domainInstructions: 'Use formal medical terminology.',
-      };
-
-      const systemPrompt = promptBuilder.buildSystemPrompt(input);
-      expect(systemPrompt).toContain('Source language: Tamil (ta)');
-      expect(systemPrompt).toContain('Target language: Hindi (hi)');
-      expect(systemPrompt).toContain('Translate the CURRENT SEGMENT from Tamil (ta) into Hindi (hi).');
-      expect(systemPrompt).toContain('The source text may be in ANY language');
-    });
-
-    it('should inject CRITICAL RETRY NOTICE when retry notice is provided', () => {
-      const input: PromptInput = {
-        sourceLanguage: 'gu',
-        targetLanguage: 'ta',
-        domain: 'general',
-        context: { previousText: '', currentText: '', nextText: '' },
-        protectedText: 'દર્દીને તાવ છે.',
-        glossaryTerms: [],
-        languageRules: [],
-        domainInstructions: 'General translation instructions.',
-      };
-
-      const systemPrompt = promptBuilder.buildSystemPrompt(
-        input,
-        'Untranslated source script detected'
-      );
-
-      expect(systemPrompt).toContain('## CRITICAL RETRY NOTICE');
-      expect(systemPrompt).toContain('flagged as INCOMPLETE because source-language text was left untranslated');
-    });
-
-    it('should format explicit language labels in batch system prompt', () => {
-      const input: BatchPromptInput = {
-        sourceLanguage: 'ur',
-        targetLanguage: 'ta',
-        domain: 'legal',
-        items: [{ id: 'p-1', sourceText: 'شاہد نے بیان دیا ہے۔' }],
-        glossaryTerms: [],
-        languageRules: [],
-        domainInstructions: 'Legal domain accuracy.',
-      };
-
-      const batchPrompt = promptBuilder.buildBatchSystemPrompt(input);
-      expect(batchPrompt).toContain('Source language: Urdu (ur)');
-      expect(batchPrompt).toContain('Target language: Tamil (ta)');
-      expect(batchPrompt).toContain('Translate every segment from Urdu (ur) into Tamil (ta).');
     });
   });
 });

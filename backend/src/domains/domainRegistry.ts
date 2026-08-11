@@ -3,56 +3,32 @@ import type { DomainConfig } from '../types/index.js';
 /**
  * Domain Registry
  *
- * Each domain configures the tone and style instructions for translation prompts.
- * The domain is selected by the user and affects how Gemini is instructed to
- * handle terminology, register, and precision.
+ * The tool uses one universal contextual translation profile. Legacy clients
+ * may still send general/medical/legal, but the backend always prompts the
+ * model to infer the subject matter from the document itself.
  */
 
-const DOMAINS: Record<string, DomainConfig> = {
-  general: {
-    code: 'general',
-    name: 'General',
-    promptInstructions: [
-      'Use natural, clear language that is easy for a general audience to understand.',
-      'Avoid unnecessary jargon or overly formal phrasing unless present in the source.',
-      'The tone should be appropriate to the source — neither excessively formal nor informal.',
-    ].join(' '),
-  },
-
-  medical: {
-    code: 'medical',
-    name: 'Medical',
-    promptInstructions: [
-      'Use clear, accessible language while maintaining medical accuracy.',
-      'Do not simplify medical terminology when doing so would change the meaning.',
-      'Preserve drug names, dosage values, and clinical measurements exactly as in the source.',
-      'Patient-facing content should be easy to understand; clinical documentation should maintain precision.',
-    ].join(' '),
-  },
-
-  legal: {
-    code: 'legal',
-    name: 'Legal',
-    promptInstructions: [
-      'Use appropriately formal language consistent with legal documents.',
-      'Maintain legal accuracy and preserve specific legal terms where required.',
-      'Avoid unnecessarily complicated phrasing while preserving legal meaning.',
-      'Do not paraphrase clauses or conditions — translate them faithfully.',
-    ].join(' '),
-  },
+const UNIVERSAL_DOMAIN: DomainConfig = {
+  code: 'universal',
+  name: 'Universal Contextual',
+  promptInstructions: [
+    'Treat every document as a universal contextual translation task.',
+    'Infer the subject matter from the segment and surrounding context, including medical, legal, technical, financial, academic, regulatory, user-interface, or general content.',
+    'Choose terminology, register, and style from the inferred context while preserving semantic fidelity.',
+    'Maintain specialized terminology accurately without over-specializing ordinary text.',
+  ].join(' '),
 };
 
 /**
- * Returns domain configuration by code.
- * Falls back to 'general' if the code is not recognized.
+ * Returns the universal domain configuration for all requests.
  */
-export function getDomainConfig(code: string): DomainConfig {
-  return DOMAINS[code] ?? DOMAINS['general']!;
+export function getDomainConfig(_code?: string): DomainConfig {
+  return UNIVERSAL_DOMAIN;
 }
 
 /**
- * Returns all registered domains.
+ * Returns the single active domain profile for backward-compatible callers.
  */
 export function getAllDomains(): DomainConfig[] {
-  return Object.values(DOMAINS);
+  return [UNIVERSAL_DOMAIN];
 }

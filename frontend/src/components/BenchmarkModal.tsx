@@ -46,10 +46,6 @@ export const BenchmarkModal: React.FC<BenchmarkModalProps> = ({
             <span className="font-semibold text-slate-200">{report.sourceLanguage} &rarr; {report.targetLanguage}</span>
           </div>
           <div>
-            <span>Domain: </span>
-            <span className="font-semibold text-slate-200 capitalize">{report.domain}</span>
-          </div>
-          <div>
             <span>Segments: </span>
             <span className="font-semibold text-slate-200">{report.totalSegments}</span>
           </div>
@@ -65,7 +61,7 @@ export const BenchmarkModal: React.FC<BenchmarkModalProps> = ({
             <thead className="bg-slate-950 text-slate-400 uppercase tracking-wider border-b border-slate-800">
               <tr>
                 <th className="p-3 font-semibold">Metric</th>
-                <th className="p-3 font-semibold text-blue-400">Google Gemini (gemini-2.0-flash)</th>
+                <th className="p-3 font-semibold text-blue-400">Gemini 3.1 Pro (Preview)</th>
                 <th className="p-3 font-semibold text-emerald-400">Groq Llama 3.3 (70b-versatile)</th>
               </tr>
             </thead>

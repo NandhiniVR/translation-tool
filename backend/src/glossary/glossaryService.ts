@@ -25,6 +25,7 @@ export class GlossaryService {
    *   - sourceLanguage matches
    *   - targetLanguage matches
    *   - domain matches, OR the term has no domain restriction
+   *   - universal/no domain requests include all matching language-pair terms
    */
   getTerms(
     sourceLanguage: string,
@@ -37,7 +38,10 @@ export class GlossaryService {
         term.targetLanguage === targetLanguage;
 
       const domainMatch =
-        term.domain === undefined || term.domain === domain;
+        !domain ||
+        domain === 'universal' ||
+        term.domain === undefined ||
+        term.domain === domain;
 
       return langMatch && domainMatch;
     });

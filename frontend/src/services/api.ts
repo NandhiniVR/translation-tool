@@ -1,10 +1,11 @@
-import type { Language, Domain, TranslationResponse } from '../types';
+import type { Language, TranslationResponse } from '../types';
+
+export type AIProvider = 'gemini' | 'groq' | 'mistral' | 'openrouter';
 
 export interface BenchmarkReport {
   documentName: string;
   sourceLanguage: string;
   targetLanguage: string;
-  domain: string;
   totalSegments: number;
   batchSize: number;
   concurrency: number;
@@ -67,25 +68,21 @@ export async function fetchLanguages(): Promise<Language[]> {
   return data.languages;
 }
 
-export async function fetchDomains(): Promise<Domain[]> {
-  const res = await fetch('/api/domains');
-  const data = await safeJson<{ domains: Domain[] }>(res, 'Failed to fetch domains');
-  return data.domains;
-}
-
 export async function translateDocument(
   file: File,
   sourceLanguage: string,
   targetLanguage: string,
-  domain: string,
-  aiProvider: 'gemini' | 'groq' = 'gemini'
+  aiProvider: AIProvider = 'gemini',
+  model?: string
 ): Promise<TranslationResponse> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('sourceLanguage', sourceLanguage);
   formData.append('targetLanguage', targetLanguage);
-  formData.append('domain', domain);
   formData.append('aiProvider', aiProvider);
+  if (model) {
+    formData.append('model', model);
+  }
 
   const res = await fetch('/api/translate', {
     method: 'POST',
@@ -98,14 +95,12 @@ export async function translateDocument(
 export async function runBenchmarkApi(
   file: File,
   sourceLanguage: string,
-  targetLanguage: string,
-  domain: string
+  targetLanguage: string
 ): Promise<BenchmarkReport> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('sourceLanguage', sourceLanguage);
   formData.append('targetLanguage', targetLanguage);
-  formData.append('domain', domain);
 
   const res = await fetch('/api/benchmark', {
     method: 'POST',

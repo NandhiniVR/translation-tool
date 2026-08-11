@@ -1,10 +1,12 @@
+export type AIProviderName = 'gemini' | 'groq' | 'mistral' | 'openrouter';
+
 export interface ProviderResponse {
   text: string;
   wasRetried: boolean;
   retryCount: number;
   latencyMs: number;
   model: string;
-  provider: 'gemini' | 'groq';
+  provider: AIProviderName;
 }
 
 /**
@@ -14,7 +16,7 @@ export interface ProviderResponse {
  * Enforces uniform input parameters, retry mechanisms, and response formatting.
  */
 export interface TranslationProvider {
-  readonly providerName: 'gemini' | 'groq';
+  readonly providerName: AIProviderName;
   readonly modelName: string;
 
   /**
