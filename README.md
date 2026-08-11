@@ -31,7 +31,7 @@ translation-tool/
 │   └── src/
 │       ├── config/       # Environment & Winston logger configuration
 │       ├── controllers/  # Translation & Download HTTP controllers
-│       ├── domains/      # General, Medical, Legal domain configurations
+│       ├── domains/      # Universal contextual domain profile (no user-selected domain)
 │       ├── glossary/     # Glossary lookup service & default terms
 │       ├── languages/    # Language registry (10 languages) & generic rules
 │       ├── output/       # XML OutputGenerator with well-formedness validation
@@ -63,7 +63,7 @@ Copy `.env.example` to `.env` in the root folder and set your Google Gemini API 
 GEMINI_API_KEY=your_actual_gemini_api_key_here
 PORT=3001
 TRANSLATION_CONCURRENCY=1
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-3.1-pro-preview
 ```
 
 ### 2. Install & Start Backend

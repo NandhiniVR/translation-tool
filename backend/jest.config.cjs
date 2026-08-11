@@ -8,12 +8,7 @@ module.exports = {
   transform: {
     '^.+\\.ts$': ['ts-jest', {
       useESM: true,
-      tsconfig: {
-        noUnusedLocals: false,
-        noUnusedParameters: false,
-        module: 'NodeNext',
-        moduleResolution: 'NodeNext',
-      }
+      tsconfig: 'tsconfig.test.json',
     }]
   },
   moduleNameMapper: {

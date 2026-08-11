@@ -1,9 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import JSZip from 'jszip';
 import { DOCXAdapter } from '../adapters/DOCXAdapter.js';
 import { DOCXOutputGenerator } from './DOCXOutputGenerator.js';
 import type { ValidationReport, TranslationResult } from '../types/index.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 describe('DOCXOutputGenerator', () => {
   let generator: DOCXOutputGenerator;

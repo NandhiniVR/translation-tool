@@ -24,16 +24,28 @@ function getEnvInt(key: string, defaultValue: number): number {
 }
 
 export const config = {
-  provider: getEnv('AI_PROVIDER', 'gemini').toLowerCase() as 'gemini' | 'groq',
+  provider: getEnv('AI_PROVIDER', 'gemini').toLowerCase() as 'gemini' | 'groq' | 'mistral' | 'openrouter',
   gemini: {
     apiKey: getEnv('GEMINI_API_KEY', ''),
-    model: getEnv('GEMINI_MODEL', 'gemini-3.5-flash-lite'),
+    model: getEnv('GEMINI_MODEL', 'gemini-3.1-pro-preview'),
     maxRetries: getEnvInt('MAX_RETRIES', getEnvInt('GEMINI_MAX_RETRIES', 1)),
   },
   groq: {
     apiKey: getEnv('GROQ_API_KEY', ''),
     model: getEnv('GROQ_MODEL', 'llama-3.3-70b-versatile'),
     maxRetries: getEnvInt('GROQ_MAX_RETRIES', 1),
+  },
+  mistral: {
+    apiKey: getEnv('MISTRAL_API_KEY', ''),
+    model: getEnv('MISTRAL_MODEL', 'mistral-large-latest'),
+    baseUrl: getEnv('MISTRAL_BASE_URL', 'https://api.mistral.ai/v1'),
+    maxRetries: getEnvInt('MISTRAL_MAX_RETRIES', 1),
+  },
+  openrouter: {
+    apiKey: getEnv('OPENROUTER_API_KEY', ''),
+    model: getEnv('OPENROUTER_MODEL', 'meta-llama/llama-3.3-70b-instruct'),
+    baseUrl: getEnv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
+    maxRetries: getEnvInt('OPENROUTER_MAX_RETRIES', 1),
   },
   server: {
     port: getEnvInt('PORT', 3001),

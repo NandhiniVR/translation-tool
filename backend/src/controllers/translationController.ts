@@ -6,17 +6,26 @@ import { AdapterFactory } from '../adapters/AdapterFactory.js';
 import { generateOutputFileName } from '../utils/fileNameUtils.js';
 import { OutputGeneratorFactory } from '../output/OutputGeneratorFactory.js';
 import { TranslationPipeline } from '../translation/TranslationPipeline.js';
+import { ProviderFactory } from '../translation/ProviderFactory.js';
 import { TranslationBenchmark } from '../benchmark/TranslationBenchmark.js';
 import { SegmentValidator } from '../validation/SegmentValidator.js';
 import { getAllLanguages } from '../languages/languageRegistry.js';
 import { getAllDomains } from '../domains/domainRegistry.js';
 import { config } from '../config/index.js';
 import { logger } from '../config/logger.js';
-import type { TranslationJobStatus, PipelineProfilerMetrics } from '../types/index.js';
+import type { TranslationJobStatus, PipelineProfilerMetrics, TranslationDomain } from '../types/index.js';
+import type { AIProviderName } from '../translation/TranslationProvider.js';
+
+const SUPPORTED_PROVIDERS: readonly AIProviderName[] = ['gemini', 'groq', 'mistral', 'openrouter'];
 
 const translationPipeline = new TranslationPipeline();
 const translationBenchmark = new TranslationBenchmark();
 const segmentValidator = new SegmentValidator();
+const LEGACY_DOMAINS = new Set(['general', 'medical', 'legal']);
+
+function normalizeTranslationDomain(domain?: string): TranslationDomain {
+  return domain && LEGACY_DOMAINS.has(domain) ? (domain as TranslationDomain) : 'universal';
+}
 
 export const getLanguages = (_req: Request, res: Response): void => {
   const languages = getAllLanguages();
@@ -41,12 +50,14 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
     }
 
     // Validate request body
-    const { sourceLanguage, targetLanguage, domain, aiProvider } = req.body as {
+    const { sourceLanguage, targetLanguage, domain, aiProvider, model } = req.body as {
       sourceLanguage?: string;
       targetLanguage?: string;
       domain?: string;
-      aiProvider?: 'gemini' | 'groq';
+      aiProvider?: AIProviderName;
+      model?: string;
     };
+    const selectedModel = typeof model === 'string' && model.trim() ? model.trim() : undefined;
 
     if (!sourceLanguage) {
       res.status(400).json({ error: 'sourceLanguage is required.' });
@@ -56,19 +67,27 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
       res.status(400).json({ error: 'targetLanguage is required.' });
       return;
     }
-    if (!domain || !['general', 'medical', 'legal'].includes(domain)) {
-      res.status(400).json({ error: 'domain must be one of: general, medical, legal.' });
+    const translationDomain = normalizeTranslationDomain(domain);
+
+    const activeProviderName = aiProvider ?? config.provider;
+    if (!SUPPORTED_PROVIDERS.includes(activeProviderName as AIProviderName)) {
+      res.status(400).json({ error: `Unsupported AI provider: ${activeProviderName}.` });
       return;
     }
-
-    const activeProviderName = (aiProvider ?? config.provider) as 'gemini' | 'groq';
+    const providerConfigurationError = ProviderFactory.getConfigurationError(activeProviderName as AIProviderName);
+    if (providerConfigurationError) {
+      res.status(400).json({ error: providerConfigurationError });
+      return;
+    }
 
     logger.info(`[Controller] Translation job started`, {
       jobId,
       sourceLanguage,
       targetLanguage,
-      domain,
+      domain: translationDomain,
+      requestedDomain: domain,
       aiProvider: activeProviderName,
+      model: selectedModel,
       originalName: file.originalname,
     });
 
@@ -92,10 +111,11 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
       {
         sourceLanguage,
         targetLanguage,
-        domain: domain as 'general' | 'medical' | 'legal',
+        domain: translationDomain,
         segments: doc.segments,
         jobId,
-        providerName: activeProviderName,
+        providerName: activeProviderName as AIProviderName,
+        modelName: selectedModel,
       },
       (status) => {
         progressUpdates.push(status);
@@ -238,10 +258,11 @@ export const runBenchmark = async (req: Request, res: Response): Promise<void> =
       domain?: string;
     };
 
-    if (!sourceLanguage || !targetLanguage || !domain) {
-      res.status(400).json({ error: 'sourceLanguage, targetLanguage, and domain are required for benchmarking.' });
+    if (!sourceLanguage || !targetLanguage) {
+      res.status(400).json({ error: 'sourceLanguage and targetLanguage are required for benchmarking.' });
       return;
     }
+    const translationDomain = normalizeTranslationDomain(domain);
 
     const adapter = AdapterFactory.getAdapter(file.originalname);
     const fileBuffer = file.buffer;
@@ -254,7 +275,7 @@ export const runBenchmark = async (req: Request, res: Response): Promise<void> =
       doc,
       sourceLanguage,
       targetLanguage,
-      domain as 'general' | 'medical' | 'legal'
+      translationDomain
     );
 
     res.json(report);

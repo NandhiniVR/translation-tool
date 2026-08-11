@@ -5,12 +5,6 @@ export interface Language {
   direction: 'ltr' | 'rtl';
 }
 
-export interface Domain {
-  code: 'general' | 'medical' | 'legal';
-  name: string;
-  promptInstructions: string;
-}
-
 export interface SegmentError {
   segmentId: string;
   segmentIndex: number;

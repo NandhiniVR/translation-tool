@@ -1,4 +1,5 @@
 import type { TranslationProvider } from './TranslationProvider.js';
+import type { AIProviderName } from './TranslationProvider.js';
 import { ProviderFactory } from './ProviderFactory.js';
 import { ContextBuilder } from './ContextBuilder.js';
 import { PromptBuilder } from './PromptBuilder.js';
@@ -18,6 +19,7 @@ import type {
   SegmentError,
   BatchSegmentInputItem,
   BatchPromptInput,
+  TranslationDomain,
 } from '../types/index.js';
 
 export type ProgressCallback = (status: TranslationJobStatus) => void;
@@ -25,10 +27,10 @@ export type ProgressCallback = (status: TranslationJobStatus) => void;
 export interface PipelineInput {
   sourceLanguage: string;
   targetLanguage: string;
-  domain: 'general' | 'medical' | 'legal';
+  domain?: TranslationDomain;
   segments: TranslationSegment[];
   jobId: string;
-  providerName?: 'gemini' | 'groq';
+  providerName?: AIProviderName;
   modelName?: string;
 }
 
@@ -76,7 +78,9 @@ export class TranslationPipeline {
     input: PipelineInput,
     onProgress?: ProgressCallback
   ): Promise<PipelineRunResult> {
-    const { segments, sourceLanguage, targetLanguage, domain, jobId, providerName, modelName } = input;
+    const { segments, sourceLanguage, targetLanguage, jobId, providerName, modelName } = input;
+    const requestedDomain = input.domain;
+    const domain: TranslationDomain = 'universal';
     const startTime = Date.now();
     const provider = ProviderFactory.getProvider(providerName, modelName);
 
@@ -100,6 +104,7 @@ export class TranslationPipeline {
       sourceLanguage,
       targetLanguage,
       domain,
+      requestedDomain,
       provider: provider.providerName,
       model: provider.modelName,
       concurrency: this.concurrency,
@@ -298,7 +303,7 @@ export class TranslationPipeline {
     allSegments: TranslationSegment[],
     sourceLanguage: string,
     targetLanguage: string,
-    domain: 'general' | 'medical' | 'legal',
+    domain: TranslationDomain,
     domainInstructions: string,
     languageRules: string[],
     glossaryTerms: unknown[],
@@ -540,7 +545,7 @@ export class TranslationPipeline {
     allSegments: TranslationSegment[],
     sourceLanguage: string,
     targetLanguage: string,
-    domain: 'general' | 'medical' | 'legal',
+    domain: TranslationDomain,
     domainInstructions: string,
     languageRules: string[],
     provider: TranslationProvider

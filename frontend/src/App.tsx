@@ -5,18 +5,18 @@ import { ConfigPanel } from './components/ConfigPanel';
 import { ProgressTracker } from './components/ProgressTracker';
 import { FailureReportModal } from './components/FailureReportModal';
 import { BenchmarkModal } from './components/BenchmarkModal';
-import { fetchLanguages, fetchDomains, translateDocument, runBenchmarkApi } from './services/api';
-import type { Language, Domain, TranslationResponse } from './types';
-import type { BenchmarkReport } from './services/api';
+import { fetchLanguages, translateDocument, runBenchmarkApi } from './services/api';
+import type { Language, TranslationResponse } from './types';
+import type { AIProvider, BenchmarkReport } from './services/api';
+import { getDefaultModel } from './services/providers';
 import { Play, BarChart2 } from 'lucide-react';
 
 export function App() {
   const [languages, setLanguages] = useState<Language[]>([]);
-  const [domains, setDomains] = useState<Domain[]>([]);
   const [sourceLanguage, setSourceLanguage] = useState<string>('en');
   const [targetLanguage, setTargetLanguage] = useState<string>('hi');
-  const [domain, setDomain] = useState<string>('medical');
-  const [aiProvider, setAiProvider] = useState<'gemini' | 'groq'>('gemini');
+  const [aiProvider, setAiProvider] = useState<AIProvider>('gemini');
+  const [selectedModel, setSelectedModel] = useState<string>(getDefaultModel('gemini'));
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isTranslating, setIsTranslating] = useState<boolean>(false);
@@ -29,19 +29,14 @@ export function App() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load configurable languages and domains from backend
-    Promise.all([fetchLanguages(), fetchDomains()])
-      .then(([langs, doms]) => {
+    fetchLanguages()
+      .then((langs) => {
         setLanguages(langs);
-        setDomains(doms);
         if (langs.length > 0) {
           setSourceLanguage(langs[0]!.code);
           if (langs.length > 1) {
             setTargetLanguage(langs[1]!.code);
           }
-        }
-        if (doms.length > 0) {
-          setDomain(doms[0]!.code);
         }
       })
       .catch((err) => {
@@ -49,6 +44,11 @@ export function App() {
         setErrorMsg(`Failed to connect to translation backend: ${err.message || 'Unknown error'}`);
       });
   }, []);
+
+  const handleProviderChange = (provider: AIProvider) => {
+    setAiProvider(provider);
+    setSelectedModel(getDefaultModel(provider));
+  };
 
   const handleStartTranslation = async () => {
     if (!selectedFile) return;
@@ -61,8 +61,8 @@ export function App() {
         selectedFile,
         sourceLanguage,
         targetLanguage,
-        domain,
-        aiProvider
+        aiProvider,
+        selectedModel
       );
       setTranslationResult(response);
     } catch (err) {
@@ -78,7 +78,7 @@ export function App() {
     setErrorMsg(null);
 
     try {
-      const report = await runBenchmarkApi(selectedFile, sourceLanguage, targetLanguage, domain);
+      const report = await runBenchmarkApi(selectedFile, sourceLanguage, targetLanguage);
       setBenchmarkReport(report);
       setIsBenchmarkModalOpen(true);
     } catch (err) {
@@ -132,15 +132,14 @@ export function App() {
 
           <ConfigPanel
             languages={languages}
-            domains={domains}
             sourceLanguage={sourceLanguage}
             targetLanguage={targetLanguage}
-            domain={domain}
             aiProvider={aiProvider}
+            selectedModel={selectedModel}
             onSourceLanguageChange={setSourceLanguage}
             onTargetLanguageChange={setTargetLanguage}
-            onDomainChange={setDomain}
-            onAiProviderChange={setAiProvider}
+            onAiProviderChange={handleProviderChange}
+            onModelChange={setSelectedModel}
             disabled={isTranslating || isBenchmarking}
           />
         </div>

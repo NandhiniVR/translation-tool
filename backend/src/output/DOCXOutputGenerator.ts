@@ -74,11 +74,14 @@ export class DOCXOutputGenerator implements DocumentOutputGenerator {
     if (completedResults.length === 0 && results.length > 0) {
       const firstFailure = results.find((r) => r.status === 'failed');
       const rootCause = firstFailure?.errorMessage ?? 'All API calls failed';
+      const apiFailureHint = /(?:model.+not found|not supported for generatecontent)/i.test(rootCause)
+        ? 'This is a model configuration error. Select a model supported by the active provider and update its model environment variable.'
+        : "This is likely an API quota, authentication, or network error — check the selected provider's API key and rate limits.";
       const message =
         `DOCX output blocked: 0 of ${results.length} segments were translated. ` +
         `Root cause: ${rootCause}. ` +
         (apiFailures.length > 0
-          ? `This is likely an API quota or network error — check your GEMINI_API_KEY / GROQ_API_KEY and rate limits.`
+          ? apiFailureHint
           : `Check backend logs for details.`);
       logger.error(`[DOCXOutputGenerator] ${message}`);
       return {
