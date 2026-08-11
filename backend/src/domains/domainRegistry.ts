@@ -16,6 +16,7 @@ const UNIVERSAL_DOMAIN: DomainConfig = {
     'Infer the subject matter from the segment and surrounding context, including medical, legal, technical, financial, academic, regulatory, user-interface, or general content.',
     'Choose terminology, register, and style from the inferred context while preserving semantic fidelity.',
     'Maintain specialized terminology accurately without over-specializing ordinary text.',
+    'For translation tasks, always use a conversational, natural tone that seamlessly integrates common English corporate terms.',
   ].join(' '),
 };
 

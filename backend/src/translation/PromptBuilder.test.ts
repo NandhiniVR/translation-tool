@@ -94,11 +94,29 @@ describe('PromptBuilder - Universal Contextual Translation Prompt', () => {
 
     it('mandates 1:1 structural replication and protected placeholder preservation', () => {
       const text = prompt();
-      expect(text).toContain('Never merge, summarize, skip, omit, invent, or unnecessarily reorder content.');
+      expect(text).toContain('Never merge, summarize, skip, reorder, or omit content.');
       expect(text).toContain('__TAG_0__');
       expect(text).toContain('__ENTITY_1__');
       expect(text).toContain('must remain EXACTLY unchanged');
       expect(text).toContain('Preserve every placeholder token EXACTLY as it appears.');
+    });
+
+    it('includes the mandatory 1:1 replication, layout/directionality, and structured-data rules', () => {
+      const text = prompt();
+      // 1. 1:1 replication
+      expect(text).toContain('### 1.1 1:1 REPLICATION');
+      expect(text).toContain('The number and order of translated segments must remain identical to the source.');
+      // 2. Layout & directionality (RTL handling)
+      expect(text).toContain('### 1.2 LAYOUT & DIRECTIONALITY');
+      expect(text).toContain('automatically apply appropriate RTL directionality');
+      expect(text).toContain('Do not unnecessarily change the layout of LTR documents.');
+      // 3. Structured data & tables
+      expect(text).toContain('### 1.3 STRUCTURED DATA & TABLES');
+      expect(text).toContain('place the translation ONLY in the column designated for the target language');
+      expect(text).toContain('Preserve all existing column headers exactly unless they themselves are translatable content.');
+      expect(text).toContain('Never change the number of rows or columns.');
+      expect(text).toContain('Do not move, merge, split, or reorder table rows or columns.');
+      expect(text).toContain('These rules are MANDATORY and take priority over stylistic preferences.');
     });
 
     it('keeps professional terminology guidance per subject area without fixing a domain', () => {
@@ -172,6 +190,15 @@ describe('PromptBuilder - Universal Contextual Translation Prompt', () => {
       expect(batchPrompt).toContain('Preserve every segment ID exactly');
       expect(batchPrompt).toContain('Return exactly one translation for every input segment');
       expect(batchPrompt).toContain('Do not omit segments, merge segments, or reorder segment IDs.');
+    });
+
+    it('applies the mandatory structural and layout rules to batch translation', () => {
+      const batchPrompt = builder.buildBatchSystemPrompt(baseBatchInput());
+      expect(batchPrompt).toContain('### 1.1 1:1 REPLICATION');
+      expect(batchPrompt).toContain('The number and order of translated segments must remain identical to the source.');
+      expect(batchPrompt).toContain('### 1.2 LAYOUT & DIRECTIONALITY');
+      expect(batchPrompt).toContain('### 1.3 STRUCTURED DATA & TABLES');
+      expect(batchPrompt).toContain('These rules are MANDATORY and take priority over stylistic preferences.');
     });
 
     it('keeps the exact JSON output structure required by the pipeline', () => {
