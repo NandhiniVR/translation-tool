@@ -32,3 +32,6 @@ logs/
 
 # Test coverage
 coverage/
+.freebuff/ 
+.env 
+.env.* 
