@@ -35,3 +35,7 @@ coverage/
 .freebuff/ 
 .env 
 .env.* 
+
+.freebuff/
+backend/test-tmp/
+!.env.example
