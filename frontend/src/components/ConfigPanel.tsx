@@ -1,6 +1,6 @@
 import React from 'react';
-import type { Language } from '../types';
-import { Cpu } from 'lucide-react';
+import type { Language, TranslationType } from '../types';
+import { Cpu, FileText, MessageSquare } from 'lucide-react';
 import type { AIProvider } from '../services/api';
 import { PROVIDERS, getProviderModels } from '../services/providers';
 
@@ -10,10 +10,14 @@ interface ConfigPanelProps {
   targetLanguage: string;
   aiProvider: AIProvider;
   selectedModel: string;
+  translationType: TranslationType;
+  customInstructions: string;
   onSourceLanguageChange: (lang: string) => void;
   onTargetLanguageChange: (lang: string) => void;
   onAiProviderChange: (provider: AIProvider) => void;
   onModelChange: (model: string) => void;
+  onTranslationTypeChange: (type: TranslationType) => void;
+  onCustomInstructionsChange: (instructions: string) => void;
   disabled?: boolean;
 }
 
@@ -23,13 +27,18 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   targetLanguage,
   aiProvider,
   selectedModel,
+  translationType,
+  customInstructions,
   onSourceLanguageChange,
   onTargetLanguageChange,
   onAiProviderChange,
   onModelChange,
+  onTranslationTypeChange,
+  onCustomInstructionsChange,
   disabled,
 }) => {
   const modelOptions = getProviderModels(aiProvider);
+  const isChatMode = translationType === 'chat-bilingual';
 
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-900 p-5 shadow-sm space-y-4">
@@ -38,6 +47,41 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
       </h2>
 
       <div className="space-y-4">
+        {/* Translation Mode Selector */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-300 mb-2">
+            Translation Mode
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onTranslationTypeChange('standard')}
+              className={`flex flex-col items-center justify-center p-3 rounded-md border text-xs transition-colors ${
+                !isChatMode
+                  ? 'border-blue-500 bg-blue-950/40 text-blue-200 font-semibold'
+                  : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              } disabled:opacity-50`}
+            >
+              <FileText className="h-4 w-4 mb-1.5" />
+              <span>Standard Document</span>
+            </button>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onTranslationTypeChange('chat-bilingual')}
+              className={`flex flex-col items-center justify-center p-3 rounded-md border text-xs transition-colors ${
+                isChatMode
+                  ? 'border-blue-500 bg-blue-950/40 text-blue-200 font-semibold'
+                  : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              } disabled:opacity-50`}
+            >
+              <MessageSquare className="h-4 w-4 mb-1.5" />
+              <span>Chat / Bilingual DOCX</span>
+            </button>
+          </div>
+        </div>
+
         {/* Source Language */}
         <div>
           <label htmlFor="source-language" className="block text-xs font-semibold text-slate-300 mb-1">
@@ -70,12 +114,47 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
             disabled={disabled}
             className="w-full rounded-md border border-slate-700 bg-slate-950 p-2.5 text-xs text-slate-100 shadow-sm focus:border-blue-500 focus:outline-none disabled:opacity-50"
           >
-            {languages.map((lang) => (
-              <option key={lang.code} value={lang.code}>
-                {lang.name} {lang.nativeName ? `(${lang.nativeName})` : ''} [{lang.code}]
-              </option>
-            ))}
+            {languages
+              .filter((lang) => lang.code !== 'auto')
+              .map((lang) => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.name} {lang.nativeName ? `(${lang.nativeName})` : ''} [{lang.code}]
+                </option>
+              ))}
           </select>
+        </div>
+
+        {/* Custom Instructions (Chat mode option) */}
+        {isChatMode && (
+          <div>
+            <label htmlFor="custom-instructions" className="block text-xs font-semibold text-slate-300 mb-1">
+              Custom Translation Instructions (Optional)
+            </label>
+            <textarea
+              id="custom-instructions"
+              value={customInstructions}
+              onChange={(e) => onCustomInstructionsChange(e.target.value)}
+              disabled={disabled}
+              placeholder="e.g. Use natural conversational style. Keep product codes and names unchanged."
+              rows={3}
+              className="w-full rounded-md border border-slate-700 bg-slate-950 p-2.5 text-xs text-slate-100 shadow-sm focus:border-blue-500 focus:outline-none disabled:opacity-50 resize-y"
+            />
+          </div>
+        )}
+
+        {/* Output Format Indicator */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-300 mb-1">
+            Output Format
+          </label>
+          <div className="w-full rounded-md border border-slate-700 bg-slate-950 p-2.5 text-xs text-slate-100">
+            {isChatMode ? 'Bilingual (Original | Translation)' : 'Translation Only'}
+          </div>
+          <p className="mt-1 text-[10px] text-slate-500">
+            {isChatMode
+              ? 'Translate chat conversations into your selected target language while preserving the original text.'
+              : 'Output contains only the translated content.'}
+          </p>
         </div>
 
         {/* AI Provider */}

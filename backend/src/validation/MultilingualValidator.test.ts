@@ -66,4 +66,60 @@ describe('Multilingual Validation', () => {
       expect(res.status).toBe('valid');
     });
   });
+
+  describe('SegmentValidator.checkCompleteness - multilingual input documents', () => {
+    it('allows unchanged English content in a Tamil → English document (Example A)', () => {
+      const source = 'Patient Name: John Smith';
+      const target = 'Patient Name: John Smith'; // preserved unchanged — English in a Tamil→English doc
+
+      const res = validator.checkCompleteness(source, target, 'ta', 'en');
+      expect(res.isComplete).toBe(true);
+      expect(res.status).toBe('valid');
+    });
+
+    it('allows unchanged English content in a Tamil → Hindi document (Example B)', () => {
+      const source = 'The patient is stable.';
+      const target = 'The patient is stable.'; // preserved unchanged — English in a Tamil→Hindi doc
+
+      const res = validator.checkCompleteness(source, target, 'ta', 'hi');
+      expect(res.isComplete).toBe(true);
+      expect(res.status).toBe('valid');
+    });
+
+    it('allows unchanged Hindi content in a Tamil → Hindi document (Example B)', () => {
+      const source = 'यह हिंदी में लिखा गया है।';
+      const target = 'यह हिंदी में लिखा गया है।'; // already in the target language — unchanged
+
+      const res = validator.checkCompleteness(source, target, 'ta', 'hi');
+      expect(res.isComplete).toBe(true);
+      expect(res.status).toBe('valid');
+    });
+
+    it('warns (not fails) on unchanged Farsi content in an Urdu → English document (Example C)', () => {
+      const source = 'بیمار تب دارد و باید استراحت کند.';
+      const target = 'بیمار تب دارد و باید استراحت کند.'; // preserved unchanged — Farsi in an Urdu→English doc
+
+      const res = validator.checkCompleteness(source, target, 'ur', 'en');
+      expect(res.isComplete).toBe(true);
+      expect(res.status).toBe('warning');
+    });
+
+    it('still fails a genuinely untranslated Tamil segment in a Tamil → English document', () => {
+      const source = 'நோயாளிக்கு காய்ச்சல் உள்ளது.';
+      const target = 'நோயாளிக்கு காய்ச்சல் உள்ளது.'; // untranslated source-language copy
+
+      const res = validator.checkCompleteness(source, target, 'ta', 'en');
+      expect(res.isComplete).toBe(false);
+      expect(res.status).toBe('failed');
+    });
+
+    it('still fails an untranslated Urdu segment in an Urdu → Tamil document when the source is clearly Urdu', () => {
+      const source = 'مریض کو بخار ہے اور اسے آرام کرنا چاہیے۔';
+      const target = 'مریض کو بخار ہے اور اسے آرام کرنا چاہیے۔'; // untranslated source-language copy
+
+      const res = validator.checkCompleteness(source, target, 'ur', 'ta');
+      expect(res.isComplete).toBe(false);
+      expect(res.status).toBe('failed');
+    });
+  });
 });

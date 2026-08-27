@@ -1,4 +1,4 @@
-import type { Language, TranslationResponse } from '../types';
+import type { Language, TranslationResponse, OutputFormat, TranslationType } from '../types';
 
 export type AIProvider = 'gemini' | 'groq' | 'mistral' | 'openrouter';
 
@@ -73,15 +73,23 @@ export async function translateDocument(
   sourceLanguage: string,
   targetLanguage: string,
   aiProvider: AIProvider = 'gemini',
-  model?: string
+  model?: string,
+  outputFormat: OutputFormat = 'translation-only',
+  translationType: TranslationType = 'standard',
+  customInstructions?: string
 ): Promise<TranslationResponse> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('sourceLanguage', sourceLanguage);
   formData.append('targetLanguage', targetLanguage);
   formData.append('aiProvider', aiProvider);
+  formData.append('outputFormat', outputFormat);
+  formData.append('translationType', translationType);
   if (model) {
     formData.append('model', model);
+  }
+  if (customInstructions && customInstructions.trim()) {
+    formData.append('customInstructions', customInstructions.trim());
   }
 
   const res = await fetch('/api/translate', {

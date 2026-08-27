@@ -5,6 +5,7 @@ import type {
   ValidationReport,
   OutputResult,
   ParsedDocument,
+  OutputGenerateOptions,
 } from '../types/index.js';
 import { OutputGenerator } from './OutputGenerator.js';
 
@@ -13,6 +14,10 @@ import { OutputGenerator } from './OutputGenerator.js';
  *
  * Wraps existing `OutputGenerator` to fulfill `DocumentOutputGenerator` interface
  * for `.mqxliff` and `.xliff` documents.
+ *
+ * XLIFF/mqxliff files are inherently bilingual (each trans-unit carries both
+ * <source> and <target> side-by-side), so both output formats share the same
+ * XML generation; only the output filename distinguishes the mode.
  */
 export class MemoQOutputGenerator implements DocumentOutputGenerator {
   private readonly generator: OutputGenerator;
@@ -25,7 +30,8 @@ export class MemoQOutputGenerator implements DocumentOutputGenerator {
     doc: TranslationDocument,
     results: TranslationResult[],
     validationReport: ValidationReport,
-    outputPath: string
+    outputPath: string,
+    _options?: OutputGenerateOptions
   ): OutputResult {
     const parsedDocument = doc.formatContext as ParsedDocument;
 

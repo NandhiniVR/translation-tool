@@ -6,17 +6,19 @@ import { ProgressTracker } from './components/ProgressTracker';
 import { FailureReportModal } from './components/FailureReportModal';
 import { BenchmarkModal } from './components/BenchmarkModal';
 import { fetchLanguages, translateDocument, runBenchmarkApi } from './services/api';
-import type { Language, TranslationResponse } from './types';
+import type { Language, TranslationResponse, TranslationType } from './types';
 import type { AIProvider, BenchmarkReport } from './services/api';
 import { getDefaultModel } from './services/providers';
 import { Play, BarChart2 } from 'lucide-react';
 
 export function App() {
   const [languages, setLanguages] = useState<Language[]>([]);
-  const [sourceLanguage, setSourceLanguage] = useState<string>('en');
-  const [targetLanguage, setTargetLanguage] = useState<string>('hi');
+  const [sourceLanguage, setSourceLanguage] = useState<string>('auto');
+  const [targetLanguage, setTargetLanguage] = useState<string>('en');
   const [aiProvider, setAiProvider] = useState<AIProvider>('gemini');
   const [selectedModel, setSelectedModel] = useState<string>(getDefaultModel('gemini'));
+  const [translationType, setTranslationType] = useState<TranslationType>('standard');
+  const [customInstructions, setCustomInstructions] = useState<string>('');
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isTranslating, setIsTranslating] = useState<boolean>(false);
@@ -32,12 +34,6 @@ export function App() {
     fetchLanguages()
       .then((langs) => {
         setLanguages(langs);
-        if (langs.length > 0) {
-          setSourceLanguage(langs[0]!.code);
-          if (langs.length > 1) {
-            setTargetLanguage(langs[1]!.code);
-          }
-        }
       })
       .catch((err) => {
         console.error('Failed to load initial configuration:', err);
@@ -50,11 +46,22 @@ export function App() {
     setSelectedModel(getDefaultModel(provider));
   };
 
+  const handleTranslationTypeChange = (type: TranslationType) => {
+    setTranslationType(type);
+    if (type === 'chat-bilingual') {
+      if (!sourceLanguage) setSourceLanguage('auto');
+      if (!targetLanguage) setTargetLanguage('en');
+    }
+  };
+
   const handleStartTranslation = async () => {
     if (!selectedFile) return;
     setIsTranslating(true);
     setTranslationResult(null);
     setErrorMsg(null);
+
+    const isChat = translationType === 'chat-bilingual';
+    const outputFormat = isChat ? 'bilingual' : 'translation-only';
 
     try {
       const response = await translateDocument(
@@ -62,7 +69,10 @@ export function App() {
         sourceLanguage,
         targetLanguage,
         aiProvider,
-        selectedModel
+        selectedModel,
+        outputFormat,
+        translationType,
+        customInstructions
       );
       setTranslationResult(response);
     } catch (err) {
@@ -136,10 +146,14 @@ export function App() {
             targetLanguage={targetLanguage}
             aiProvider={aiProvider}
             selectedModel={selectedModel}
+            translationType={translationType}
+            customInstructions={customInstructions}
             onSourceLanguageChange={setSourceLanguage}
             onTargetLanguageChange={setTargetLanguage}
             onAiProviderChange={handleProviderChange}
             onModelChange={setSelectedModel}
+            onTranslationTypeChange={handleTranslationTypeChange}
+            onCustomInstructionsChange={setCustomInstructions}
             disabled={isTranslating || isBenchmarking}
           />
         </div>

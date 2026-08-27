@@ -1,7 +1,31 @@
 import { jest } from '@jest/globals';
 import { ProviderFactory } from './ProviderFactory.js';
-import { ChatCompletionsProvider, ProviderConfigurationError } from './ChatCompletionsProvider.js';
+import { ChatCompletionsProvider, ProviderConfigurationError, resetSemaphoresForTesting } from './ChatCompletionsProvider.js';
+import { RateLimitExhaustedError } from './TranslationProvider.js';
 import type { AIProviderName } from './TranslationProvider.js';
+
+/** Builds a minimal Response-like object for fetch mocks. */
+function mockHttpResponse(status: number, body: unknown, retryAfter?: string): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+    headers: {
+      get: (name: string) => (name.toLowerCase() === 'retry-after' ? (retryAfter ?? null) : null),
+    },
+  } as unknown as Response;
+}
+
+function mistralProvider(overrides: { maxRetries?: number; rateLimitMaxRetries?: number; maxConcurrent?: number } = {}) {
+  return new ChatCompletionsProvider('mistral', {
+    apiKey: 'test-key',
+    model: 'mistral-large-latest',
+    baseUrl: 'https://api.mistral.ai/v1',
+    maxRetries: overrides.maxRetries ?? 1,
+    rateLimitMaxRetries: overrides.rateLimitMaxRetries ?? 4,
+    maxConcurrent: overrides.maxConcurrent ?? 4,
+  });
+}
 
 describe('ProviderFactory - configured providers', () => {
   it('exposes the Gemini provider under its canonical name', () => {
@@ -87,6 +111,74 @@ describe('ProviderFactory - configured providers', () => {
       await expect(provider.translate('system', 'user')).rejects.toThrow(ProviderConfigurationError);
       await expect(provider.translate('system', 'user')).rejects.toThrow(envVar);
     }
+  });
+
+  describe('provider-aware rate limiting (Mistral / OpenRouter)', () => {
+    it('retries HTTP 429 respecting Retry-After and succeeds with rate-limit accounting', async () => {
+      resetSemaphoresForTesting();
+      let callCount = 0;
+      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        callCount++;
+        // First two attempts are rate limited (Retry-After: 0 = retry now);
+        // the third succeeds.
+        if (callCount < 3) {
+          return mockHttpResponse(429, { error: { message: 'rate limited' } }, '0');
+        }
+        return mockHttpResponse(200, { choices: [{ message: { content: 'hello' } }] });
+      });
+      try {
+        const provider = mistralProvider();
+        const res = await provider.translate('system', 'user');
+        expect(res.text).toBe('hello');
+        expect(callCount).toBe(3); // 2 x 429 + 1 success — no storm beyond retry budget
+        expect(res.wasRetried).toBe(true);
+        expect(res.rateLimitCount).toBe(2);
+        expect(res.retryCount).toBe(2);
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it('throws RateLimitExhaustedError after exhausting the rate-limit budget (never a generic error)', async () => {
+      resetSemaphoresForTesting();
+      let callCount = 0;
+      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        callCount++;
+        return mockHttpResponse(429, { error: { message: 'rate limited' } }, '0');
+      });
+      try {
+        const provider = mistralProvider({ rateLimitMaxRetries: 2 }); // 3 attempts total
+        await expect(provider.translate('system', 'user')).rejects.toThrow(RateLimitExhaustedError);
+        expect(callCount).toBe(3);
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it('bounds concurrent in-flight requests with the provider-wide semaphore', async () => {
+      resetSemaphoresForTesting();
+      let active = 0;
+      let maxActive = 0;
+      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        active++;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((r) => setTimeout(r, 20));
+        active--;
+        return mockHttpResponse(200, { choices: [{ message: { content: 'ok' } }] });
+      });
+      try {
+        const provider = mistralProvider({ maxConcurrent: 2 });
+        const results = await Promise.all(
+          Array.from({ length: 4 }, () => provider.translate('system', 'user'))
+        );
+        expect(results).toHaveLength(4);
+        expect(results.every((r) => r.text === 'ok')).toBe(true);
+        // Never more than the configured safe limit in flight at once.
+        expect(maxActive).toBeLessThanOrEqual(2);
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
   });
 
   it('surfaces the provider API error message for auth failures without leaking the key', async () => {

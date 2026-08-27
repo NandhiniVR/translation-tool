@@ -1,5 +1,6 @@
 import * as path from 'path';
 import { getLanguageByCode } from '../languages/languageRegistry.js';
+import type { OutputFormat } from '../types/index.js';
 
 /**
  * generateOutputFileName
@@ -12,18 +13,20 @@ import { getLanguageByCode } from '../languages/languageRegistry.js';
  *   - The target language name is looked up from the language registry.
  *   - If the language code is not found in the registry, the code itself is used as a fallback.
  *   - The language name is always lowercased.
- *   - No prefix such as "translated_" is added.
+ *   - Bilingual output appends `_bilingual` so the presentation mode is clear.
  *
  * Examples:
- *   generateOutputFileName('Hello.docx', 'ta')           → 'Hello_tamil.docx'
- *   generateOutputFileName('Medical_Report.docx', 'hi')  → 'Medical_Report_hindi.docx'
- *   generateOutputFileName('Patient.Report.Final.docx', 'gu') → 'Patient.Report.Final_gujarati.docx'
- *   generateOutputFileName('Consent.mqxliff', 'ur')      → 'Consent_urdu.mqxliff'
- *   generateOutputFileName('Doc.xliff', 'bn')            → 'Doc_bengali.xliff'
+ *   generateOutputFileName('Hello.docx', 'ta')                  → 'Hello_tamil.docx'
+ *   generateOutputFileName('Hello.docx', 'ta', 'bilingual')     → 'Hello_tamil_bilingual.docx'
+ *   generateOutputFileName('Medical_Report.docx', 'hi')         → 'Medical_Report_hindi.docx'
+ *   generateOutputFileName('Patient.Report.Final.docx', 'gu')   → 'Patient.Report.Final_gujarati.docx'
+ *   generateOutputFileName('Consent.mqxliff', 'ur')             → 'Consent_urdu.mqxliff'
+ *   generateOutputFileName('Doc.xliff', 'bn')                   → 'Doc_bengali.xliff'
  */
 export function generateOutputFileName(
   originalFileName: string,
-  targetLanguageCode: string
+  targetLanguageCode: string,
+  outputFormat?: OutputFormat
 ): string {
   const ext = path.extname(originalFileName);           // e.g. '.docx'
   const base = path.basename(originalFileName, ext);    // e.g. 'Medical_Report_Final'
@@ -31,5 +34,7 @@ export function generateOutputFileName(
   const lang = getLanguageByCode(targetLanguageCode);
   const langName = (lang?.name ?? targetLanguageCode).toLowerCase(); // e.g. 'tamil'
 
-  return `${base}_${langName}${ext}`;
+  const modeSuffix = outputFormat === 'bilingual' ? '_bilingual' : '';
+
+  return `${base}_${langName}${modeSuffix}${ext}`;
 }

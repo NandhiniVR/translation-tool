@@ -50,6 +50,8 @@ export class SegmentValidator {
       case 'ml':
         return /[\u0D00-\u0D7F]/g;
       case 'ur':
+      case 'fa':
+      case 'ps':
         return /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/g;
       case 'en':
         return /[A-Za-z]/g;
@@ -98,38 +100,95 @@ export class SegmentValidator {
       };
     }
 
-    // 0. Conversational Commentary Detection (e.g. "Unfortunately, there is no text...")
-    const conversationalPattern = /^(unfortunately|there is no text|here is the translation|i cannot translate|as an ai|note:)/i;
-    if (conversationalPattern.test(cleanTarget.trim())) {
-      return {
-        isComplete: false,
-        status: 'failed',
-        reason: 'LLM returned conversational commentary instead of translation',
-      };
+    // Mixed-language document support:
+    // A document may contain text in several languages simultaneously (for
+    // example English, Tamil, Hindi, Urdu, Farsi/Persian, or Pashto). Segments
+    // written in a language OTHER than the selected source language must be
+    // preserved unchanged, so the completeness heuristics below are relaxed
+    // when the source text shows no sign of the source-language script.
+    const srcLangNorm = (sourceLang ?? '').toLowerCase();
+    const tgtLangNorm = (targetLang ?? '').toLowerCase();
+    const languagesDiffer = srcLangNorm !== '' && tgtLangNorm !== '' && srcLangNorm !== tgtLangNorm;
+
+    let sourceInSourceScript = true;
+    if (languagesDiffer) {
+      const srcScriptRegex = this.getScriptRegex(srcLangNorm);
+      if (srcScriptRegex) {
+        sourceInSourceScript = (cleanSource.match(srcScriptRegex) ?? []).length > 0;
+      }
     }
 
+    // Languages that share the Arabic script (Urdu, Farsi/Persian, Pashto,
+    // Arabic, ...) cannot be told apart by script alone. A verbatim copy of
+    // such a segment may be a sibling language preserved unchanged, so it is
+    // downgraded from a hard failure to a warning — UNLESS the source text
+    // contains characters distinctive of the selected source language, which
+    // indicates it really is source-language content that was left untranslated.
+    const sharedScriptLanguages = new Set(['ar', 'fa', 'ps', 'sd', 'ur']);
+    const distinctiveChars: Record<string, RegExp> = {
+      // Urdu: ٹ ڈ ڑ ں ھ ہ ے (rarely or never used by Farsi/Pashto)
+      ur: /[\u0679\u0688\u0691\u06BA\u06BE\u06C1\u06D2]/,
+      // Pashto: ټ ډ ړ ږ ښ ګ ڼ ۍ ې
+      ps: /[\u067C\u0689\u0693\u0696\u069A\u06AB\u06BC\u06CD\u06D0\u06D3]/,
+    };
+
+    // Verbatim copy detection, shared by the shared-script relaxation and the
+    // word-overlap heuristic below.
+    const sourceWords = cleanSource.split(/\s+/).filter((w) => w.length >= 4);
+    let verbatimRatio = 0;
+    if (sourceWords.length >= 3) {
+      const targetWordSet = new Set(cleanTarget.split(/\s+/));
+      let matchedCount = 0;
+      for (const w of sourceWords) {
+        if (targetWordSet.has(w)) matchedCount++;
+      }
+      verbatimRatio = matchedCount / sourceWords.length;
+    }
+    const isVerbatimCopy = verbatimRatio >= 0.7;
+
     // 1. Script Mismatch Heuristic (when source and target use different scripts)
-    if (sourceLang && targetLang && sourceLang.toLowerCase() !== targetLang.toLowerCase()) {
-      const srcScriptRegex = this.getScriptRegex(sourceLang);
-      const tgtScriptRegex = this.getScriptRegex(targetLang);
+    if (languagesDiffer) {
+      const srcScriptRegex = this.getScriptRegex(srcLangNorm);
+      const tgtScriptRegex = this.getScriptRegex(tgtLangNorm);
 
       // A. Check if source script characters remain in target (excluding Latin if source is Latin, since English technical terms/proper nouns are common)
-      if (srcScriptRegex && sourceLang.toLowerCase() !== 'en') {
+      if (srcScriptRegex && srcLangNorm !== 'en') {
         const srcMatches = cleanTarget.match(srcScriptRegex) ?? [];
         const srcCharCount = srcMatches.length;
         if (srcCharCount > 3 && srcCharCount / cleanTarget.length > 0.15) {
-          return {
-            isComplete: false,
-            status: 'failed',
-            reason: `Untranslated source script (${sourceLang}) detected in target (${targetLang}) output`,
-          };
+          if (!sourceInSourceScript) {
+            // Segment is not written in the source-language script; it may be
+            // written in another language and legitimately preserved unchanged.
+          } else if (sharedScriptLanguages.has(srcLangNorm) && isVerbatimCopy) {
+            const distinctive = distinctiveChars[srcLangNorm];
+            if (distinctive && distinctive.test(cleanSource)) {
+              // Source text uses characters distinctive of the selected source
+              // language — this is genuinely untranslated source content.
+              return {
+                isComplete: false,
+                status: 'failed',
+                reason: `Untranslated source script (${sourceLang}) detected in target (${targetLang}) output`,
+              };
+            }
+            return {
+              isComplete: true,
+              status: 'warning',
+              reason: `Segment appears to be written in a language other than ${sourceLang} and was preserved unchanged`,
+            };
+          } else {
+            return {
+              isComplete: false,
+              status: 'failed',
+              reason: `Untranslated source script (${sourceLang}) detected in target (${targetLang}) output`,
+            };
+          }
         }
       }
 
       // B. Check if target script is completely missing when target is a non-Latin script language (e.g. Hindi, Tamil, Gujarati)
-      if (tgtScriptRegex && targetLang.toLowerCase() !== 'en' && cleanSource.length >= 8) {
+      if (tgtScriptRegex && tgtLangNorm !== 'en' && cleanSource.length >= 8) {
         const tgtMatches = cleanTarget.match(tgtScriptRegex) ?? [];
-        if (tgtMatches.length === 0) {
+        if (tgtMatches.length === 0 && sourceInSourceScript) {
           return {
             isComplete: false,
             status: 'failed',
@@ -140,32 +199,27 @@ export class SegmentValidator {
     }
 
     // 2. Verbatim Word Overlap Heuristic
-    if (sourceLang && targetLang && sourceLang.toLowerCase() !== targetLang.toLowerCase()) {
-      const sourceWords = cleanSource
-        .split(/\s+/)
-        .filter((w) => w.length >= 4);
-
-      if (sourceWords.length >= 3) {
-        const targetWordSet = new Set(cleanTarget.split(/\s+/));
-        let matchedCount = 0;
-        for (const w of sourceWords) {
-          if (targetWordSet.has(w)) matchedCount++;
+    if (languagesDiffer && sourceWords.length >= 3) {
+      if (verbatimRatio >= 0.7) {
+        if (!sourceInSourceScript) {
+          // Non-source-language content was preserved unchanged — legitimate in
+          // a multilingual document.
+          return { isComplete: true, status: 'valid' };
         }
-
-        const ratio = matchedCount / sourceWords.length;
-        if (ratio >= 0.70) {
-          return {
-            isComplete: false,
-            status: 'failed',
-            reason: `Substantial source text (${Math.round(ratio * 100)}%) left untranslated`,
-          };
-        } else if (ratio >= 0.45) {
-          return {
-            isComplete: true,
-            status: 'warning',
-            reason: `Possible untranslated source words (${Math.round(ratio * 100)}%) detected`,
-          };
+        return {
+          isComplete: false,
+          status: 'failed',
+          reason: `Substantial source text (${Math.round(verbatimRatio * 100)}%) left untranslated`,
+        };
+      } else if (verbatimRatio >= 0.45) {
+        if (!sourceInSourceScript) {
+          return { isComplete: true, status: 'valid' };
         }
+        return {
+          isComplete: true,
+          status: 'warning',
+          reason: `Possible untranslated source words (${Math.round(verbatimRatio * 100)}%) detected`,
+        };
       }
     }
 
@@ -174,12 +228,20 @@ export class SegmentValidator {
 
   /**
    * Validates the full set of translation results against the source segments.
+   *
+   * `skipCompletenessCheck` skips the per-segment multilingual completeness
+   * recheck. The pipeline already runs `checkCompleteness` on every translated
+   * segment, so re-running it here is duplicated work on large documents — the
+   * aggregate checks (count, IDs, emptiness, tag/entity restoration, numbers)
+   * are still performed and completeness failures still surface via the
+   * segment's `status === 'failed'` path.
    */
   validate(
     sourceSegments: TranslationSegment[],
     results: TranslationResult[],
     sourceLang?: string,
-    targetLang?: string
+    targetLang?: string,
+    options?: { skipCompletenessCheck?: boolean }
   ): ValidationReport {
     const warnings: string[] = [];
     const failedSegments: SegmentError[] = [];
@@ -284,8 +346,9 @@ export class SegmentValidator {
         }
       }
 
-      // 8. Multilingual Completeness Check
-      if (source && source.sourceText.trim().length > 0) {
+      // 8. Multilingual Completeness Check (already run by the pipeline per
+      //    segment; skipped on request to avoid duplicated work on large docs)
+      if (!options?.skipCompletenessCheck && source && source.sourceText.trim().length > 0) {
         const comp = this.checkCompleteness(
           source.sourceText,
           result.translatedText,

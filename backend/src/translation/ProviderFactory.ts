@@ -16,6 +16,14 @@ import type { AIProviderName } from './TranslationProvider.js';
  * the model selected in the frontend instead of blindly using a global model.
  */
 export class ProviderFactory {
+  /**
+   * Reuse provider clients (HTTP connection pools, SDK handles) across jobs
+   * within the same process. Keyed by provider + model so different model
+   * selections still get their own client. Cached clients are safe to share:
+   * every translate() call is stateless per request.
+   */
+  private static readonly clientCache = new Map<string, TranslationProvider>();
+
   static getConfigurationError(providerName: AIProviderName): string | null {
     const requiredKeyByProvider: Record<AIProviderName, { value: string; envName: string }> = {
       gemini: { value: config.gemini.apiKey, envName: 'GEMINI_API_KEY' },
@@ -29,17 +37,28 @@ export class ProviderFactory {
 
   static getProvider(providerName?: AIProviderName, modelName?: string): TranslationProvider {
     const name = providerName ?? config.provider;
+    const cacheKey = `${name}:${modelName?.trim() || 'default'}`;
 
+    const cached = this.clientCache.get(cacheKey);
+    if (cached) return cached;
+
+    let provider: TranslationProvider;
     switch (name) {
       case 'gemini':
-        return new GeminiProvider(modelName);
+        provider = new GeminiProvider(modelName);
+        break;
       case 'groq':
-        return new GroqProvider(modelName);
+        provider = new GroqProvider(modelName);
+        break;
       case 'mistral':
       case 'openrouter':
-        return new ChatCompletionsProvider(name, chatCompletionsConfigs[name], modelName);
+        provider = new ChatCompletionsProvider(name, chatCompletionsConfigs[name], modelName);
+        break;
       default:
         throw new Error(`Unsupported AI provider: ${String(name)}`);
     }
+
+    this.clientCache.set(cacheKey, provider);
+    return provider;
   }
 }

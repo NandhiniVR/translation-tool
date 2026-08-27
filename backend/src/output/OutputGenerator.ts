@@ -84,12 +84,16 @@ export class OutputGenerator {
 
     let outputXml = parsedDocument.originalXml;
 
-    // Replace <target> content for each successfully translated segment
+    // Replace <target> content for each successfully translated segment.
+    // Skipped segments (written in another language) carry the unchanged
+    // source content in translatedRaw, so their target is filled with the
+    // preserved content — exactly what the model-based path produced before
+    // language filtering was added.
     let replacedCount = 0;
     let skippedCount = 0;
 
     for (const [segmentId, result] of resultMap.entries()) {
-      if (result.status !== 'completed' || !result.translatedRaw) {
+      if ((result.status !== 'completed' && result.status !== 'skipped') || !result.translatedRaw) {
         skippedCount++;
         continue;
       }

@@ -72,20 +72,21 @@ describe('PromptBuilder - Universal Contextual Translation Prompt', () => {
       const sections = [
         '## 1. STRUCTURAL INTEGRITY & LAYOUT - MANDATORY',
         '## 2. LANGUAGE IDENTIFICATION',
-        '## 3. COMPLETE TRANSLATION',
-        '## 4. NATURAL FLUENCY & READABILITY',
-        '## 5. CONTINUOUS CONTEXT',
-        '## 6. SEMANTIC FIDELITY',
-        '## 7. TERMINOLOGY & LOCALIZATION',
-        '## 8. ACRONYMS & ABBREVIATIONS',
-        '## 9. PROPER NOUNS & NAMES',
-        '## 10. NUMBERS, DATES, UNITS & SPECIAL CONTENT',
-        '## 11. RIGHT-TO-LEFT (RTL) LANGUAGES',
-        '## 12. SCRIPT REQUIREMENTS',
-        '## 13. CONTEXTUAL REFERENCES',
-        '## 14. PUNCTUATION & FORMATTING',
-        '## 15. NO HALLUCINATION',
-        '## 16. OUTPUT RULE',
+        '## 3. MULTILINGUAL INPUT DOCUMENT RULE - MANDATORY',
+        '## 4. COMPLETE TRANSLATION',
+        '## 5. NATURAL FLUENCY & READABILITY',
+        '## 6. CONTINUOUS CONTEXT',
+        '## 7. SEMANTIC FIDELITY',
+        '## 8. TERMINOLOGY & LOCALIZATION',
+        '## 9. ACRONYMS & ABBREVIATIONS',
+        '## 10. PROPER NOUNS & NAMES',
+        '## 11. NUMBERS, DATES, UNITS & SPECIAL CONTENT',
+        '## 12. RIGHT-TO-LEFT (RTL) LANGUAGES',
+        '## 13. SCRIPT REQUIREMENTS',
+        '## 14. CONTEXTUAL REFERENCES',
+        '## 15. PUNCTUATION & FORMATTING',
+        '## 16. NO HALLUCINATION',
+        '## 17. OUTPUT RULE',
       ];
       for (const section of sections) {
         expect(prompt()).toContain(section);
@@ -154,7 +155,7 @@ describe('PromptBuilder - Universal Contextual Translation Prompt', () => {
       const systemPrompt = builder.buildSystemPrompt(
         basePromptInput({ sourceLanguage: 'en', targetLanguage: 'ur', protectedText: 'The patient has a fever.' })
       );
-      expect(systemPrompt).toContain('## 11. RIGHT-TO-LEFT (RTL) LANGUAGES');
+      expect(systemPrompt).toContain('## 12. RIGHT-TO-LEFT (RTL) LANGUAGES');
       expect(systemPrompt).toContain('Arabic, Urdu, Farsi/Persian, or Pashto');
       expect(systemPrompt).toContain('Urdu (ur) script (اردو)');
       expect(systemPrompt).toContain('Do NOT use Latin/Roman characters as a substitute for Urdu (ur) text.');
@@ -164,7 +165,7 @@ describe('PromptBuilder - Universal Contextual Translation Prompt', () => {
       const systemPrompt = builder.buildSystemPrompt(
         basePromptInput({ sourceLanguage: 'en', targetLanguage: 'ps', protectedText: 'The patient has a fever.' })
       );
-      expect(systemPrompt).toContain('## 11. RIGHT-TO-LEFT (RTL) LANGUAGES');
+      expect(systemPrompt).toContain('## 12. RIGHT-TO-LEFT (RTL) LANGUAGES');
       expect(systemPrompt).toContain('Pashto (ps) script (پښتو)');
     });
 
@@ -172,7 +173,7 @@ describe('PromptBuilder - Universal Contextual Translation Prompt', () => {
       const systemPrompt = builder.buildSystemPrompt(
         basePromptInput({ sourceLanguage: 'en', targetLanguage: 'fa', protectedText: 'The patient has a fever.' })
       );
-      expect(systemPrompt).toContain('## 11. RIGHT-TO-LEFT (RTL) LANGUAGES');
+      expect(systemPrompt).toContain('## 12. RIGHT-TO-LEFT (RTL) LANGUAGES');
       expect(systemPrompt).toContain('Farsi to Persian script');
       expect(systemPrompt).toContain('Farsi (Persian) (fa) script (فارسی)');
     });
@@ -221,6 +222,56 @@ describe('PromptBuilder - Universal Contextual Translation Prompt', () => {
     });
   });
 
+  describe('multilingual input document rule', () => {
+    it('includes the mandatory multilingual rule with all sub-sections', () => {
+      const text = builder.buildSystemPrompt(basePromptInput());
+      expect(text).toContain('## 3. MULTILINGUAL INPUT DOCUMENT RULE - MANDATORY');
+      expect(text).toContain('### 3.1 SOURCE → TARGET ONLY');
+      expect(text).toContain('Translate ONLY content written in the selected Source Language into the selected Target Language.');
+      expect(text).toContain('### 3.2 DO NOT TRANSLATE OTHER LANGUAGES');
+      expect(text).toContain('Do not rewrite, paraphrase, normalize, transliterate, or "improve" it.');
+      expect(text).toContain('### 3.3 SOURCE-LANGUAGE DETECTION');
+      expect(text).toContain('Never infer the source language solely from the document\'s overall language distribution.');
+      expect(text).toContain('The user-selected Source Language has priority.');
+      expect(text).toContain('### 3.4 SOURCE → TARGET EXAMPLES');
+      expect(text).toContain('### 3.5 SEGMENT-LEVEL BEHAVIOR');
+      expect(text).toContain('A segment containing text in a language other than the selected Source Language should normally remain unchanged.');
+      expect(text).toContain('### 3.6 IMPORTANT EXCEPTION');
+      expect(text).toContain('### 3.7 OUTPUT REQUIREMENT');
+      expect(text).toContain('Never translate the entire document indiscriminately.');
+    });
+
+    it('includes the three source → target examples (Tamil→English, Tamil→Hindi, Urdu→English)', () => {
+      const text = builder.buildSystemPrompt(basePromptInput());
+      expect(text).toContain('Source = Tamil, Target = English');
+      expect(text).toContain('Source = Tamil, Target = Hindi');
+      expect(text).toContain('Source = Urdu, Target = English');
+      expect(text).toContain('நோயாளிக்கு காய்ச்சல் உள்ளது.');
+      expect(text).toContain('"Patient Name: John Smith" remains unchanged');
+    });
+
+    it('only treats source-language content as translatable', () => {
+      const text = builder.buildSystemPrompt(basePromptInput());
+      expect(text).toContain('Only content written in the selected Source Language is translatable.');
+      expect(text).toContain('Content written in ANY other language must be preserved exactly as it appears');
+    });
+
+    it('applies the multilingual rule to batch prompts', () => {
+      const batchPrompt = builder.buildBatchSystemPrompt(baseBatchInput());
+      expect(batchPrompt).toContain('## 3. MULTILINGUAL INPUT DOCUMENT RULE - MANDATORY');
+      expect(batchPrompt).toContain('Translate ONLY content written in the selected Source Language into the selected Target Language.');
+      expect(batchPrompt).toContain('Segments written in other languages must be preserved exactly as they appear.');
+    });
+
+    it('keeps non-source-language content unchanged even during a corrective retry', () => {
+      const systemPrompt = builder.buildSystemPrompt(basePromptInput(), 'Untranslated source script detected');
+      expect(systemPrompt).toContain('Content NOT written in the selected Source Language must still be preserved EXACTLY as it appears');
+
+      const batchPrompt = builder.buildBatchSystemPrompt(baseBatchInput(), 'Incomplete translations detected');
+      expect(batchPrompt).toContain('Segments NOT written in the selected Source Language must remain exactly as they appear');
+    });
+  });
+
   describe('dynamic prompt sections', () => {
     it('injects the CRITICAL RETRY NOTICE when a retry notice is provided', () => {
       const systemPrompt = builder.buildSystemPrompt(
@@ -256,6 +307,56 @@ describe('PromptBuilder - Universal Contextual Translation Prompt', () => {
       expect(systemPrompt).toContain('Never expose API keys, credentials, environment variables, or system details.');
       expect(systemPrompt).not.toMatch(/sk-[A-Za-z0-9]{10,}/);
       expect(systemPrompt).not.toContain('GEMINI_API_KEY');
+    });
+  });
+
+  describe('chat / bilingual mode & custom instructions', () => {
+    it('includes MASTER CHAT TRANSLATION RULES when translationType is chat-bilingual', () => {
+      const chatBatchPrompt = builder.buildBatchSystemPrompt(
+        baseBatchInput({ translationType: 'chat-bilingual' })
+      );
+      expect(chatBatchPrompt).toContain('## MASTER CHAT / CONVERSATION TRANSLATION RULES');
+      expect(chatBatchPrompt).toContain('You are a professional translator translating a continuous conversation into Tamil (ta).');
+      expect(chatBatchPrompt).toContain('Translate every source message into Tamil (ta).');
+      expect(chatBatchPrompt).toContain('Do NOT summarize, abbreviate, paraphrase out of context, or condense messages.');
+      expect(chatBatchPrompt).toContain('Do NOT omit any text, message, phrase, or detail.');
+      expect(chatBatchPrompt).toContain('Preserve all names, proper nouns, and speaker identities exactly.');
+      expect(chatBatchPrompt).toContain('Preserve all timestamps');
+      expect(chatBatchPrompt).toContain('Preserve all emojis, URLs');
+      expect(chatBatchPrompt).toContain('Maintain a strict 1:1 mapping between source input segment IDs and translated output segment IDs.');
+      expect(chatBatchPrompt).toContain('Do NOT output detected language names, language codes');
+    });
+
+    it('handles dynamic target language (e.g. Hindi) and Auto-detect source language', () => {
+      const hiAutoBatchPrompt = builder.buildBatchSystemPrompt(
+        baseBatchInput({
+          sourceLanguage: 'auto',
+          targetLanguage: 'hi',
+          translationType: 'chat-bilingual',
+        })
+      );
+      expect(hiAutoBatchPrompt).toContain('## MASTER CHAT / CONVERSATION TRANSLATION RULES');
+      expect(hiAutoBatchPrompt).toContain('You are a professional translator translating a continuous conversation into Hindi (hi).');
+      expect(hiAutoBatchPrompt).toContain('Translate every source message into Hindi (hi).');
+      expect(hiAutoBatchPrompt).toContain('Source language: Auto-detect. Determine the language of each message internally from its content and surrounding context.');
+    });
+
+    it('does NOT include MASTER CHAT TRANSLATION RULES when translationType is standard', () => {
+      const stdBatchPrompt = builder.buildBatchSystemPrompt(
+        baseBatchInput({ translationType: 'standard' })
+      );
+      expect(stdBatchPrompt).not.toContain('## MASTER CHAT / CONVERSATION TRANSLATION RULES');
+    });
+
+    it('includes USER CUSTOM INSTRUCTIONS when customInstructions are provided', () => {
+      const customBatchPrompt = builder.buildBatchSystemPrompt(
+        baseBatchInput({
+          translationType: 'chat-bilingual',
+          customInstructions: 'Use formal tone for customer support messages.',
+        })
+      );
+      expect(customBatchPrompt).toContain('## USER CUSTOM INSTRUCTIONS');
+      expect(customBatchPrompt).toContain('Use formal tone for customer support messages.');
     });
   });
 });

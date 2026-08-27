@@ -69,6 +69,7 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
                   </h3>
                   <p className="text-xs opacity-80">
                     Format: <span className="font-semibold uppercase">{formatLabel}</span> | Total: {result.totalSegments} segments | Completed: {result.completed} | Failed: {result.failed}
+                    {result.skipped != null && result.skipped > 0 && ` | Skipped: ${result.skipped}`}
                   </p>
                 </div>
               </div>
@@ -105,6 +106,12 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
                   <span className="text-slate-500 block text-[10px] uppercase font-sans">API Calls / Retries</span>
                   <span className="font-bold text-slate-200">{metrics.geminiRequests} calls ({metrics.totalRetries} retries)</span>
                 </div>
+                {metrics.skippedSegments > 0 && (
+                  <div className="bg-slate-950/60 p-2 rounded border border-slate-800">
+                    <span className="text-slate-500 block text-[10px] uppercase font-sans">Skipped (other lang)</span>
+                    <span className="font-bold text-slate-200">{metrics.skippedSegments}</span>
+                  </div>
+                )}
                 <div className="bg-slate-950/60 p-2 rounded border border-slate-800">
                   <span className="text-slate-500 block text-[10px] uppercase font-sans">Batch / Concurrency</span>
                   <span className="font-bold text-amber-300">Size: {metrics.batchSize} | Workers: {metrics.concurrency}</span>

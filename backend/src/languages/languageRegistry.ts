@@ -15,6 +15,12 @@ import type { LanguageConfig } from '../types/index.js';
  */
 const LANGUAGE_REGISTRY: LanguageConfig[] = [
   {
+    code: 'auto',
+    name: 'Auto-detect',
+    nativeName: 'Auto-detect',
+    direction: 'ltr',
+  },
+  {
     code: 'en',
     name: 'English',
     nativeName: 'English',
@@ -123,10 +129,11 @@ export function isRtlLanguage(code: string): boolean {
 
 /**
  * Returns a human-readable display label for a language code.
- * E.g. "ta" -> "Tamil (ta)", "hi" -> "Hindi (hi)".
+ * E.g. "ta" -> "Tamil (ta)", "auto" -> "Auto-detect".
  * If the code is not in the registry, returns the code itself.
  */
 export function getLanguageLabel(code: string): string {
+  if (code === 'auto') return 'Auto-detect';
   const lang = getLanguageByCode(code);
   if (!lang) return code;
   return `${lang.name} (${lang.code})`;

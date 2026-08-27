@@ -15,6 +15,10 @@ export interface DocxFormatContext {
   zip: JSZip;
   documentXml: string;
   nodeRefs: DocxNodeRef[];
+  /** Time spent extracting segments from the parsed XML (ms) — for profiling */
+  extractionMs?: number;
+  /** Time spent unpacking the ZIP and parsing document.xml (ms) — for profiling */
+  parsingMs?: number;
 }
 
 /**
@@ -58,8 +62,11 @@ export class DOCXAdapter implements DocumentAdapter {
     const nodeRefs: DocxNodeRef[] = [];
 
     // Parse document.xml to extract paragraphs (<w:p>)
+    const tParseStart = Date.now();
     const parsed = this.xmlParser.parse(documentXml);
+    const tParseMs = Date.now() - tParseStart;
 
+    const tExtractStart = Date.now();
     let segmentIndex = 0;
     this.traverseParagraphs(parsed, (text, _pNode) => {
       const trimmed = text.trim();
@@ -88,6 +95,7 @@ export class DOCXAdapter implements DocumentAdapter {
 
       segmentIndex++;
     });
+    const tExtractMs = Date.now() - tExtractStart;
 
     logger.info(`[DOCXAdapter] Extracted ${segments.length} translatable segments from ${fileName}`);
 
@@ -95,6 +103,8 @@ export class DOCXAdapter implements DocumentAdapter {
       zip,
       documentXml,
       nodeRefs,
+      extractionMs: tExtractMs,
+      parsingMs: tParseMs,
     };
 
     return {

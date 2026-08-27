@@ -1,4 +1,5 @@
 import Groq from 'groq-sdk';
+import { PermanentProviderError } from './TranslationProvider.js';
 import type { TranslationProvider, ProviderResponse } from './TranslationProvider.js';
 import { config } from '../config/index.js';
 import { logger } from '../config/logger.js';
@@ -35,6 +36,7 @@ export class GroqProvider implements TranslationProvider {
   ): Promise<ProviderResponse> {
     let lastError: Error | null = null;
     let retryCount = 0;
+    let retryWaitMs = 0;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       const tStart = Date.now();
@@ -52,6 +54,7 @@ export class GroqProvider implements TranslationProvider {
 
         const tCallMs = Date.now() - tStart;
         const text = response.choices[0]?.message?.content ?? '';
+        const usage = response.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
 
         if (attempt > 0) {
           logger.info(`[Groq] Succeeded after ${attempt} retry(ies)`);
@@ -62,11 +65,25 @@ export class GroqProvider implements TranslationProvider {
           wasRetried: attempt > 0,
           retryCount: attempt,
           latencyMs: tCallMs,
+          retryWaitMs,
+          usage: {
+            inputTokens: usage?.prompt_tokens ?? 0,
+            outputTokens: usage?.completion_tokens ?? 0,
+          },
           model: this.modelName,
           provider: 'groq',
         };
       } catch (err) {
         lastError = err as Error;
+        const permanent = this.classifyPermanent(err);
+        if (permanent.isPermanent) {
+          // Fail immediately — an invalid API key, missing model, or auth
+          // failure will never succeed on retry.
+          throw new PermanentProviderError(
+            `Groq API failed: ${lastError.message}`,
+            permanent.status
+          );
+        }
         const isRetryable = this.isRetryableError(err);
 
         if (!isRetryable || attempt === this.maxRetries) {
@@ -95,6 +112,7 @@ export class GroqProvider implements TranslationProvider {
           });
         }
 
+        retryWaitMs += delay;
         await this.sleep(delay);
       }
     }
@@ -102,6 +120,32 @@ export class GroqProvider implements TranslationProvider {
     throw new GroqTranslationError(
       `Groq API failed after ${retryCount} retry(ies): ${lastError?.message ?? 'Unknown error'}`
     );
+  }
+
+  /**
+   * Detects errors that will never succeed on retry: invalid API key,
+   * insufficient balance, unsupported model, authentication failures.
+   */
+  private classifyPermanent(err: unknown): { isPermanent: boolean; status?: number } {
+    const raw = err as { status?: number; message?: string };
+    const status = typeof raw.status === 'number' ? raw.status : undefined;
+    if (status !== undefined) {
+      if ([401, 402, 403, 404, 422].includes(status)) return { isPermanent: true, status };
+      return { isPermanent: false };
+    }
+    const msg = (raw.message ?? '').toLowerCase();
+    const statusMatch = msg.match(/(?:^|\s)(401|402|403|404|422)(?:\s|$)/);
+    if (statusMatch) return { isPermanent: true, status: Number(statusMatch[1]) };
+    return {
+      isPermanent:
+        msg.includes('invalid api key') ||
+        msg.includes('unauthorized') ||
+        msg.includes('authentication') ||
+        msg.includes('permission denied') ||
+        msg.includes('insufficient balance') ||
+        msg.includes('model not found') ||
+        msg.includes('does not exist'),
+    };
   }
 
   private isRetryableError(err: unknown): boolean {

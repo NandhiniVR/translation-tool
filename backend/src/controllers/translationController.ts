@@ -13,10 +13,11 @@ import { getAllLanguages } from '../languages/languageRegistry.js';
 import { getAllDomains } from '../domains/domainRegistry.js';
 import { config } from '../config/index.js';
 import { logger } from '../config/logger.js';
-import type { TranslationJobStatus, PipelineProfilerMetrics, TranslationDomain } from '../types/index.js';
+import type { TranslationJobStatus, PipelineProfilerMetrics, TranslationDomain, OutputFormat, TranslationType } from '../types/index.js';
 import type { AIProviderName } from '../translation/TranslationProvider.js';
 
 const SUPPORTED_PROVIDERS: readonly AIProviderName[] = ['gemini', 'groq', 'mistral', 'openrouter'];
+const SUPPORTED_OUTPUT_FORMATS = new Set<OutputFormat>(['translation-only', 'bilingual']);
 
 const translationPipeline = new TranslationPipeline();
 const translationBenchmark = new TranslationBenchmark();
@@ -50,14 +51,19 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
     }
 
     // Validate request body
-    const { sourceLanguage, targetLanguage, domain, aiProvider, model } = req.body as {
+    const { sourceLanguage, targetLanguage, domain, aiProvider, model, outputFormat, translationType, customInstructions } = req.body as {
       sourceLanguage?: string;
       targetLanguage?: string;
       domain?: string;
       aiProvider?: AIProviderName;
       model?: string;
+      outputFormat?: string;
+      translationType?: string;
+      customInstructions?: string;
     };
     const selectedModel = typeof model === 'string' && model.trim() ? model.trim() : undefined;
+    const selectedTranslationType: TranslationType = translationType === 'chat-bilingual' ? 'chat-bilingual' : 'standard';
+    const selectedCustomInstructions = typeof customInstructions === 'string' && customInstructions.trim() ? customInstructions.trim() : undefined;
 
     if (!sourceLanguage) {
       res.status(400).json({ error: 'sourceLanguage is required.' });
@@ -67,6 +73,20 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
       res.status(400).json({ error: 'targetLanguage is required.' });
       return;
     }
+
+    // Output format defaults to 'translation-only' for backward compatibility.
+    // Chat translation mode automatically forces 'bilingual' output format.
+    let selectedOutputFormat: OutputFormat = selectedTranslationType === 'chat-bilingual' ? 'bilingual' : 'translation-only';
+    if (selectedTranslationType !== 'chat-bilingual' && outputFormat !== undefined && outputFormat !== '') {
+      if (!SUPPORTED_OUTPUT_FORMATS.has(outputFormat as OutputFormat)) {
+        res.status(400).json({
+          error: `Unsupported outputFormat: ${outputFormat}. Expected "translation-only" or "bilingual".`,
+        });
+        return;
+      }
+      selectedOutputFormat = outputFormat as OutputFormat;
+    }
+
     const translationDomain = normalizeTranslationDomain(domain);
 
     const activeProviderName = aiProvider ?? config.provider;
@@ -88,6 +108,7 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
       requestedDomain: domain,
       aiProvider: activeProviderName,
       model: selectedModel,
+      outputFormat: selectedOutputFormat,
       originalName: file.originalname,
     });
 
@@ -99,13 +120,13 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
     const doc = await adapter.parse(fileBuffer, file.originalname);
     const tParseMs = Date.now() - tParseStart;
 
-    const outputFileName = generateOutputFileName(file.originalname, targetLanguage);
+    const outputFileName = generateOutputFileName(file.originalname, targetLanguage, selectedOutputFormat);
     const outputFilePath = path.join(
       config.storage.outputsDir,
       `${jobId}_${outputFileName}`
     );
 
-    // 2. Run common translation pipeline with metrics
+    // 2. Run translation pipeline (Measure Provider & Batch API metrics)
     const progressUpdates: TranslationJobStatus[] = [];
     const pipelineRun = await translationPipeline.runWithMetrics(
       {
@@ -116,6 +137,8 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
         jobId,
         providerName: activeProviderName as AIProviderName,
         modelName: selectedModel,
+        translationType: selectedTranslationType,
+        customInstructions: selectedCustomInstructions,
       },
       (status) => {
         progressUpdates.push(status);
@@ -124,16 +147,29 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
 
     const results = pipelineRun.results;
     const pMetrics = pipelineRun.metrics;
-    pMetrics.tParsingMs = tParseMs;
-    pMetrics.tSegmentationMs = Math.round(tParseMs * 0.3); // Portion of parsing spent indexing segments
+    // Real parse vs. extraction split from the DOCX adapter when available;
+    // otherwise keep the full parse time under tParsingMs.
+    const docxCtx = doc.formatContext as { parsingMs?: number; extractionMs?: number } | undefined;
+    if (docxCtx?.parsingMs !== undefined && docxCtx?.extractionMs !== undefined) {
+      pMetrics.tParsingMs = docxCtx.parsingMs;
+      pMetrics.tSegmentationMs = docxCtx.extractionMs;
+    } else {
+      pMetrics.tParsingMs = tParseMs;
+      pMetrics.tSegmentationMs = 0;
+    }
 
     // 3. Validate translation results (Measure Validation time)
+    //    The pipeline already ran the per-segment multilingual completeness
+    //    check, so skip re-running it here to avoid duplicated work on large
+    //    documents. All aggregate checks (count, IDs, emptiness, tags,
+    //    entities, numbers) still run.
     const tValStart = Date.now();
     const validationReport = segmentValidator.validate(
       doc.segments,
       results,
       sourceLanguage,
-      targetLanguage
+      targetLanguage,
+      { skipCompletenessCheck: true }
     );
     pMetrics.tValidationMs += (Date.now() - tValStart);
 
@@ -144,7 +180,12 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
       doc,
       results,
       validationReport,
-      outputFilePath
+      outputFilePath,
+      {
+        outputFormat: selectedOutputFormat,
+        sourceLanguage,
+        targetLanguage,
+      }
     );
     pMetrics.tOutputGenerationMs = Date.now() - tOutStart;
     pMetrics.tTotalMs = Date.now() - tJobStart;
@@ -156,6 +197,7 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
 
     const completedCount = results.filter((r) => r.status === 'completed').length;
     const failedCount = results.filter((r) => r.status === 'failed').length;
+    const skippedCount = results.filter((r) => r.status === 'skipped').length;
 
     if (!outputResult.success) {
       res.status(500).json({
@@ -188,6 +230,7 @@ export const translateFile = async (req: Request, res: Response): Promise<void> 
       totalSegments: doc.segments.length,
       completed: completedCount,
       failed: failedCount,
+      skipped: skippedCount,
       validationReport,
       downloadUrl: `/api/download/${jobId}`,
       downloadData,
@@ -287,24 +330,71 @@ export const runBenchmark = async (req: Request, res: Response): Promise<void> =
 };
 
 function logPerformanceBreakdown(jobId: string, m: PipelineProfilerMetrics): void {
-  console.log('\n============================================================');
+  // Segment processing: everything between parsing and the AI/validation stages
+  // (extraction, glossary, language filter, protection, prompt build, restore).
+  const segmentProcessingMs =
+    m.tSegmentationMs +
+    m.tGlossaryMs +
+    m.tLanguageFilterMs +
+    m.tProtectionMs +
+    m.tPromptBuildMs +
+    m.tRestoreMs;
+  // AI waiting/request time: wall-clock span from the first request start to
+  // the last request end (includes concurrency overlap, queue wait, and retry
+  // backoff). Falls back to the summed stages when the span wasn't recorded.
+  const aiWaitRequestMs = m.tAiElapsedMs ?? (m.tQueueWaitMs + m.tGeminiApiMs + m.tRetryWaitMs);
+
+  console.log('\n========== TRANSLATION PERFORMANCE ==========');
+  console.log(`Total time:              ${m.tTotalMs} ms`);
+  console.log(`DOCX parsing:            ${m.tParsingMs} ms`);
+  console.log(`Segment processing:      ${segmentProcessingMs} ms`);
+  console.log(`AI waiting/request time: ${aiWaitRequestMs} ms`);
+  console.log(`Validation:              ${m.tValidationMs} ms`);
+  console.log(`DOCX generation:         ${m.tOutputGenerationMs} ms`);
+  console.log(`Number of AI requests:   ${m.geminiRequests}`);
+  console.log(`Successful requests:     ${m.successfulRequests}`);
+  console.log(`HTTP 429 responses:      ${m.rateLimitedRequests}`);
+  console.log(`Rate-limited batches:    ${m.rateLimitedBatches}`);
+  console.log(`Batch fallbacks:         ${m.batchFallbackCount}`);
+  console.log(`Batch rate-limit retries:${m.batchRateLimitRetries}`);
+  console.log(`Corrective requests:     ${m.correctiveRequests ?? 0}`);
+  console.log(`Segments corrected:      ${m.segmentsCorrected ?? 0}`);
+  console.log(`Corrective AI time:      ${m.tCorrectiveAiMs ?? 0} ms`);
+  console.log(`Total input tokens:      ${m.totalInputTokens}`);
+  console.log(`Total output tokens:     ${m.totalOutputTokens}`);
+  console.log(`Retries:                 ${m.totalRetries}`);
+  console.log('==============================================');
+
+  console.log('============================================================');
   console.log(`[PROFILER REPORT] Translation Job ${jobId}`);
   console.log('============================================================');
   console.log(`Parsing:              ${m.tParsingMs} ms`);
   console.log(`Segmentation:         ${m.tSegmentationMs} ms`);
   console.log(`Glossary:             ${m.tGlossaryMs} ms`);
+  console.log(`Language filter:      ${m.tLanguageFilterMs} ms`);
   console.log(`Protection:           ${m.tProtectionMs} ms`);
-  console.log(`Gemini API:           ${m.tGeminiApiMs} ms`);
+  console.log(`Prompt construction:  ${m.tPromptBuildMs} ms`);
+  console.log(`Queue/wait:           ${m.tQueueWaitMs} ms`);
+  console.log(`AI API processing:    ${m.tGeminiApiMs} ms`);
+  console.log(`Retry backoff:        ${m.tRetryWaitMs} ms`);
+  console.log(`Rate-limit wait:      ${m.tRateLimitWaitMs} ms`);
   console.log(`Validation:           ${m.tValidationMs} ms`);
+  console.log(`Placeholder restore:  ${m.tRestoreMs} ms`);
   console.log(`Output generation:    ${m.tOutputGenerationMs} ms`);
   console.log(`Total:                ${m.tTotalMs} ms`);
   console.log('------------------------------------------------------------');
   console.log(`Number of segments:      ${m.totalSegments}`);
+  console.log(`Segments skipped:        ${m.skippedSegments}`);
+  console.log(`Cache hits (deduped):    ${m.cacheHits ?? 0}`);
   console.log(`Number of Gemini calls:  ${m.geminiRequests}`);
   console.log(`Number of retries:       ${m.totalRetries}`);
+  console.log(`Average batch size:      ${m.avgBatchSize}`);
+  console.log(`Token budget/request:    ${m.maxBatchTokens}`);
+  console.log(`Input tokens:            ${m.totalInputTokens}`);
+  console.log(`Output tokens:           ${m.totalOutputTokens}`);
   console.log(`Average Gemini time:     ${m.avgGeminiTimeMs} ms`);
   console.log(`Maximum Gemini time:     ${m.maxGeminiTimeMs} ms`);
   console.log(`Concurrency:             ${m.concurrency}`);
-  console.log(`Batch size:              ${m.batchSize}`);
+  console.log(`Max batch size:          ${m.batchSize}`);
   console.log('============================================================\n');
 }

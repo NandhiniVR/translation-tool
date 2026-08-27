@@ -24,6 +24,7 @@ const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 const BASE_DELAY_MS = 1000;
 const MAX_DELAY_MS = 30000;
 
+import { PermanentProviderError } from './TranslationProvider.js';
 import type { TranslationProvider, ProviderResponse } from './TranslationProvider.js';
 
 export interface GeminiResponse extends ProviderResponse {}
@@ -55,6 +56,7 @@ export class GeminiProvider implements TranslationProvider {
   ): Promise<GeminiResponse> {
     let lastError: Error | null = null;
     let retryCount = 0;
+    let retryWaitMs = 0;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       const tStart = Date.now();
@@ -87,20 +89,37 @@ export class GeminiProvider implements TranslationProvider {
           logger.info(`[Gemini] Succeeded after ${attempt} retry(ies)`);
         }
 
+        // Capture token usage when the API reports it
+        const usageMeta = (response as { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }).usageMetadata;
+
         return {
           text: text.trim(),
           wasRetried: attempt > 0,
           retryCount: attempt,
           latencyMs: tCallMs,
+          retryWaitMs,
+          usage: {
+            inputTokens: usageMeta?.promptTokenCount ?? 0,
+            outputTokens: usageMeta?.candidatesTokenCount ?? 0,
+          },
           model: this.modelName,
           provider: 'gemini',
         };
       } catch (err) {
         lastError = err as Error;
+        const permanent = this.classifyPermanent(err);
+        if (permanent.isPermanent) {
+          // Fail immediately — an invalid API key, missing model, or auth
+          // failure will never succeed on retry.
+          throw new PermanentProviderError(
+            `Gemini API failed: ${lastError.message}`,
+            permanent.status
+          );
+        }
         const isRetryable = this.isRetryableError(err);
 
         if (!isRetryable || attempt === this.maxRetries) {
-          // Permanent error or exhausted retries
+          // Non-retryable error or exhausted retries
           logger.warn(`[Gemini] Non-retryable error or max retries reached`, {
             attempt,
             maxRetries: this.maxRetries,
@@ -127,6 +146,7 @@ export class GeminiProvider implements TranslationProvider {
           });
         }
 
+        retryWaitMs += delay;
         await this.sleep(delay);
       }
     }
@@ -134,6 +154,31 @@ export class GeminiProvider implements TranslationProvider {
     throw new GeminiTranslationError(
       `Gemini API failed after ${retryCount} retry(ies): ${lastError?.message ?? 'Unknown error'}`
     );
+  }
+
+  /**
+   * Detects errors that will never succeed on retry: invalid API key,
+   * insufficient balance, unsupported model, authentication failures.
+   */
+  private classifyPermanent(err: unknown): { isPermanent: boolean; status?: number } {
+    if (!(err instanceof Error)) return { isPermanent: false };
+    const message = err.message.toLowerCase();
+
+    const statusMatch = message.match(/(?:^|\s)(401|402|403|404|422)(?:\s|$)/);
+    const status = statusMatch ? Number(statusMatch[1]) : undefined;
+    if (status) return { isPermanent: true, status };
+
+    return {
+      isPermanent:
+        message.includes('invalid api key') ||
+        message.includes('api key not valid') ||
+        message.includes('unauthorized') ||
+        message.includes('unauthenticated') ||
+        message.includes('permission denied') ||
+        message.includes('insufficient balance') ||
+        message.includes('model not found') ||
+        message.includes('does not exist'),
+    };
   }
 
   /**

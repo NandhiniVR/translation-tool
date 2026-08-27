@@ -55,6 +55,8 @@ export interface TranslationResult {
 // Translation request / job types
 // ---------------------------------------------------------------------------
 
+export type TranslationType = 'standard' | 'chat-bilingual';
+
 export interface TranslationRequest {
   /** Unique job ID, generated server-side */
   jobId: string;
@@ -63,24 +65,87 @@ export interface TranslationRequest {
   domain?: TranslationDomain;
   inputFilePath: string;
   outputFilePath: string;
+  /** How the translated result is presented in the output document */
+  outputFormat?: OutputFormat;
+  translationType?: TranslationType;
+  customInstructions?: string;
 }
 
 export interface PipelineProfilerMetrics {
+  /** DOCX/XLIFF parsing time (zip unpack + XML parse) */
   tParsingMs: number;
+  /** Segment extraction from the parsed document */
   tSegmentationMs: number;
+  /** Glossary lookup time */
   tGlossaryMs: number;
+  /** Language/segment filtering time (identifying source-language segments) */
+  tLanguageFilterMs: number;
+  /** Placeholder/tag/entity protection time */
   tProtectionMs: number;
+  /** Prompt construction time (system + user prompts) */
+  tPromptBuildMs: number;
+  /** Time batches spend waiting for a concurrency slot / between windows */
+  tQueueWaitMs: number;
+  /** Pure AI API request time (excluding retry backoff) — summed across concurrent requests */
   tGeminiApiMs: number;
+  /**
+   * Wall-clock span from the first AI request start to the last AI request
+   * end (includes concurrency overlap, inter-window queue wait, and retry
+   * backoff). Unlike tGeminiApiMs it is bounded by the total time even when
+   * requests run concurrently. Optional for backward compatibility.
+   */
+  tAiElapsedMs?: number;
+  /** Time spent sleeping in retry backoff (transient errors only) */
+  tRetryWaitMs: number;
+  /** Time spent sleeping due to HTTP 429 responses (Retry-After / backoff) */
+  tRateLimitWaitMs: number;
+  /** Validation time (completeness checks) */
   tValidationMs: number;
+  /** Placeholder restoration time */
+  tRestoreMs: number;
+  /** Output document generation time */
   tOutputGenerationMs: number;
   tTotalMs: number;
   totalSegments: number;
+  /** Segments skipped because they were written in a language other than the source language */
+  skippedSegments: number;
+  /** Segments populated directly from the in-memory duplicate segment cache */
+  cacheHits?: number;
   geminiRequests: number;
+  /** Requests (translate calls) that returned a successful response */
+  successfulRequests: number;
+  /** Total HTTP 429 responses seen across all requests (including retries) */
+  rateLimitedRequests: number;
+  /** Batches that failed after exhausting their rate-limit retry budget */
+  rateLimitedBatches: number;
+  /** Batches that fell back to individual segment requests (genuine failures only) */
+  batchFallbackCount: number;
+  /** Pipeline-level retries where a 429-limited batch was re-queued (same batch) */
+  batchRateLimitRetries: number;
   totalRetries: number;
   avgGeminiTimeMs: number;
   maxGeminiTimeMs: number;
+  /** Actual average segments per API request */
+  avgBatchSize: number;
   concurrency: number;
+  /** Configured maximum segments per batch (token-aware batching may use fewer) */
   batchSize: number;
+  /** Token budget per API request (0 = disabled) */
+  maxBatchTokens: number;
+  /** Total input tokens consumed across all requests (0 when provider does not report usage) */
+  totalInputTokens: number;
+  /** Total output tokens produced across all requests (0 when provider does not report usage) */
+  totalOutputTokens: number;
+  /**
+   * AI requests issued by the secondary corrective pass (only segments that
+   * failed validation/completeness re-requested). Excludes rate-limit and
+   * generic API error retries.
+   */
+  correctiveRequests: number;
+  /** Segments that entered the corrective pass (validation failures) */
+  segmentsCorrected: number;
+  /** Summed AI request duration of corrective requests (concurrent overlap possible) */
+  tCorrectiveAiMs: number;
 }
 
 export interface TranslationJobStatus {
@@ -209,6 +274,8 @@ export interface BatchPromptInput {
   glossaryTerms: GlossaryTerm[];
   languageRules: string[];
   domainInstructions: string;
+  translationType?: TranslationType;
+  customInstructions?: string;
 }
 
 export interface PromptInput {
@@ -220,6 +287,8 @@ export interface PromptInput {
   glossaryTerms: GlossaryTerm[];
   languageRules: string[];
   domainInstructions: string;
+  translationType?: TranslationType;
+  customInstructions?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +336,24 @@ export interface ValidationReport {
 // ---------------------------------------------------------------------------
 // Output types
 // ---------------------------------------------------------------------------
+
+/**
+ * How the translated result is presented in the output document.
+ * - 'translation-only': output contains only the translated content (existing behavior)
+ * - 'bilingual': output pairs each original segment with its translation side-by-side
+ */
+export type OutputFormat = 'translation-only' | 'bilingual';
+
+/**
+ * Options passed to DocumentOutputGenerator.generate.
+ * `outputFormat` controls the presentation; `sourceLanguage`/`targetLanguage`
+ * are forwarded so generators can apply script/directionality handling.
+ */
+export interface OutputGenerateOptions {
+  outputFormat?: OutputFormat;
+  sourceLanguage?: string;
+  targetLanguage?: string;
+}
 
 export interface OutputResult {
   success: boolean;
