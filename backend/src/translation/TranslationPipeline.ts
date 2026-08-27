@@ -84,7 +84,7 @@ const ITEM_JSON_OVERHEAD_TOKENS = 40;
  * small batches. The real payload is still sent in full; only the estimate
  * used to size batches is capped.
  */
-const CONTEXT_ESTIMATE_CAP_TOKENS = 120;
+
 
 /**
  * Rough token estimator used for token-aware batching. ASCII text is ~4 chars
